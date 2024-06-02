@@ -2,6 +2,7 @@
 # 
 #
 
+import logging
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
@@ -11,11 +12,12 @@ import PIL.ImageTk
 
 from .interface_view import InterfaceView
 from .message_view import MessageView
+from utils.settings import AppSettings
 from utils.types import TkImg
 
 
 class DnsWin(tk.Tk):
-    def __init__(self, res_dir: Path) -> None:
+    def __init__(self, res_dir: Path, settings: AppSettings) -> None:
         super().__init__(
             screenName=None,
             baseName=None,
@@ -24,9 +26,13 @@ class DnsWin(tk.Tk):
             sync=False,
             use=None)
         self.title('DNS server manager')
+        self.geometry(f'{settings.win_width}x{settings.win_height}+'
+            f'{settings.win_x}+{settings.win_y}')
         #
         self._RES_DIR = res_dir
         """The directory of the resources."""
+        self._settings = settings
+        """The application settings object."""
         # Images...
         self._HIMG_CLOSE: PIL.Image.Image
         self._IMG_CLOSE: TkImg
@@ -34,6 +40,8 @@ class DnsWin(tk.Tk):
         self._loadRes()
         # Initializing the GUI...
         self._initGui()
+        self.update()
+        self._pdwin.sashpos(0, self._settings.left_panel_width)
         # Bindings & events...
         self.protocol('WM_DELETE_WINDOW', self._OnWinClosing)
     
@@ -166,5 +174,30 @@ class DnsWin(tk.Tk):
     def _OnWinClosing(self) -> None:
         # Releasing images...
         self._HIMG_CLOSE.close()
+        #
+        self._saveGeometry()
+        self._settings.left_panel_width = self._pdwin.sashpos(0)
         # Destroying the window...
         self.destroy()
+    
+    def _saveGeometry(self) -> None:
+        """Saves the geometry of the window to the app settings object."""
+        import re
+        w_h_x_y = self.winfo_geometry()
+        GEOMETRY_REGEX = r"""
+            (?P<width>\d+)    # The width of the window
+            x(?P<height>\d+)  # The height of the window
+            \+(?P<x>\d+)      # The x-coordinate of the window
+            \+(?P<y>\d+)      # The y-coordinate of the window"""
+        match = re.search(
+            GEOMETRY_REGEX,
+            w_h_x_y,
+            re.VERBOSE)
+        if match:
+            self._settings.win_width = int(match.group('width'))
+            self._settings.win_height = int(match.group('height'))
+            self._settings.win_x = int(match.group('x'))
+            self._settings.win_y = int(match.group('y'))
+        else:
+            logging.error(
+                'Cannot get the geometry of the window.', stack_info=True)

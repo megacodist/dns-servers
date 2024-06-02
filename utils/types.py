@@ -59,8 +59,8 @@ class AppSettings(object, metaclass=SingletonMeta):
     """
 
     def __init__(self) -> None:
-        self.lock = RLock()
-        self.file: PathLike
+        self._lock = RLock()
+        self._file: PathLike
 
     def Load(self, file: PathLike) -> None:
         """Loads settings from the specified file into the singleton
@@ -72,7 +72,7 @@ class AppSettings(object, metaclass=SingletonMeta):
         """
         # Getting hold of settings singleton object...
         count = 0
-        while not self.lock.acquire(True, 0.25):
+        while not self._lock.acquire(True, 0.25):
             sleep(0.25)
             count += 1
             if count > 16:
@@ -81,7 +81,7 @@ class AppSettings(object, metaclass=SingletonMeta):
                     stack_info=True,)
                 return
         # Reading settings from the file...
-        self.file = file
+        self._file = file
         try:
             settingsFileStream = open(
                 file,
@@ -121,13 +121,13 @@ class AppSettings(object, metaclass=SingletonMeta):
             finally:
                 settingsFileStream.close()
         finally:
-            self.lock.release()
+            self._lock.release()
 
     def Save(self) -> None:
         """Saves settings to the last loaded file."""
         # Getting hold of settings singleton object...
         count = 0
-        while not self.lock.acquire(True, 0.25):
+        while not self._lock.acquire(True, 0.25):
             sleep(0.25)
             count += 1
             if count > 16:
@@ -150,11 +150,11 @@ class AppSettings(object, metaclass=SingletonMeta):
             # signature_ will be 86 bytes long...
             signature_ = base64.b64encode(signature_)
             # Writing settings to the file...
-            with open(self.file, mode='wb') as settingsFileStream:
+            with open(self._file, mode='wb') as settingsFileStream:
                 settingsFileStream.write(signature_)
                 settingsFileStream.write(binSettings)
         finally:
-            self.lock.release()
+            self._lock.release()
 
     def _GetClassAttrsName(self) -> tuple[str, ...]:
         """Returrns a tuple of all class attributes names."""
@@ -166,7 +166,6 @@ class AppSettings(object, metaclass=SingletonMeta):
     def _GetAttrsName(self, obj: object) -> tuple[str, ...]:
         attrs = [
             attr for attr in dir(obj)
-            if not callable(getattr(self.__class__, attr)) and \
-                attr[:2] != '__' and attr[-2:] != '__']
+            if not callable(getattr(obj, attr)) and not attr.startswith('_')]
         attrs.sort()
         return tuple(attrs)
