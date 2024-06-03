@@ -12,10 +12,8 @@ _APP_DIR = Path(__file__).resolve().parent
 """The root directory of the application."""
 
 _settings: AppSettings
-"""The application settings object."""
 
 _RES_DIR = _APP_DIR / 'res'
-"""The directory of resources."""
 
 
 def main() -> None:
