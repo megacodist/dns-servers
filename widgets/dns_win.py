@@ -11,7 +11,7 @@ import PIL.Image
 import PIL.ImageTk
 
 from .interface_view import InterfaceView
-from .message_view import MessageView
+from .message_view import MessageView, MessageType
 from utils.settings import AppSettings
 from utils.types import TkImg
 
@@ -170,6 +170,16 @@ class DnsWin(tk.Tk):
         self._msgvw = MessageView(self._pdwin, self._IMG_CLOSE)
         self._msgvw.pack(fill=tk.BOTH, expand=1)
         self._pdwin.add(self._msgvw, weight=1)
+    
+    def _readInterfaces(self) -> None:
+        from ntwrk import GetInterfacesNames
+        try:
+            for name in GetInterfacesNames():
+                self._in
+        except TypeError:
+            self._msgvw.AddMessage(
+                'Unable to read network interfaces names',
+                type_=MessageType.ERROR)
     
     def _OnWinClosing(self) -> None:
         # Releasing images...
