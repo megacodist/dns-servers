@@ -176,6 +176,7 @@ class DnsWin(tk.Tk):
         #
         self._btn_addDns = ttk.Button(
             self._frm_dnsButns,
+            command=self._addDns,
             image=self._IMG_ADD) # type: ignore
         self._btn_addDns.pack(
             side=tk.LEFT)
@@ -253,3 +254,8 @@ class DnsWin(tk.Tk):
         else:
             logging.error(
                 'Cannot get the geometry of the window.', stack_info=True)
+
+    def _addDns(self) -> None:
+        from .dns_dialog import DnsDialog
+        a = DnsDialog(self)
+        print(a.dnsName, a.primary, a.secondary)
