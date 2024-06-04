@@ -10,6 +10,7 @@ from tkinter import ttk
 import PIL.Image
 import PIL.ImageTk
 
+from .dns_view import Dnsview
 from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
 from utils.settings import AppSettings
@@ -35,7 +36,15 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         # Images...
         self._HIMG_CLOSE: PIL.Image.Image
+        self._HIMG_ADD: PIL.Image.Image
+        self._HIMG_REMOVE: PIL.Image.Image
+        self._HIMG_EDIT: PIL.Image.Image
+        self._HIMG_APPLY: PIL.Image.Image
         self._IMG_CLOSE: TkImg
+        self._IMG_ADD: TkImg
+        self._IMG_REMOVE: TkImg
+        self._IMG_EDIT: TkImg
+        self._IMG_APPLY: TkImg
         # Loading resources...
         self._loadRes()
         # Initializing the GUI...
@@ -50,6 +59,22 @@ class DnsWin(tk.Tk):
         self._HIMG_CLOSE = PIL.Image.open(self._RES_DIR / 'close.png')
         self._HIMG_CLOSE = self._HIMG_CLOSE.resize(size=(16, 16,))
         self._IMG_CLOSE = PIL.ImageTk.PhotoImage(image=self._HIMG_CLOSE)
+        # Loading 'add.png...
+        self._HIMG_ADD = PIL.Image.open(self._RES_DIR / 'add.png')
+        self._HIMG_ADD = self._HIMG_ADD.resize(size=(16, 16,))
+        self._IMG_ADD = PIL.ImageTk.PhotoImage(image=self._HIMG_ADD)
+        # Loading 'remove.png...
+        self._HIMG_REMOVE = PIL.Image.open(self._RES_DIR / 'remove.png')
+        self._HIMG_REMOVE = self._HIMG_REMOVE.resize(size=(16, 16,))
+        self._IMG_REMOVE = PIL.ImageTk.PhotoImage(image=self._HIMG_REMOVE)
+        # Loading 'edit.png...
+        self._HIMG_EDIT = PIL.Image.open(self._RES_DIR / 'edit.png')
+        self._HIMG_EDIT = self._HIMG_EDIT.resize(size=(16, 16,))
+        self._IMG_EDIT = PIL.ImageTk.PhotoImage(image=self._HIMG_EDIT)
+        # Loading 'apply.png...
+        self._HIMG_APPLY = PIL.Image.open(self._RES_DIR / 'apply.png')
+        self._HIMG_APPLY = self._HIMG_APPLY.resize(size=(16, 16,))
+        self._IMG_APPLY = PIL.ImageTk.PhotoImage(image=self._HIMG_APPLY)
     
     def _initGui(self) -> None:
         #
@@ -135,7 +160,7 @@ class DnsWin(tk.Tk):
             self._frm_leftPanel,
             text='DNS servers')
         self._lfrm_dnses.columnconfigure(0, weight=1)
-        self._lfrm_dnses.rowconfigure(0, weight=1)
+        self._lfrm_dnses.rowconfigure(1, weight=1)
         self._lfrm_dnses.grid(
             column=0,
             row=1,
@@ -143,29 +168,41 @@ class DnsWin(tk.Tk):
             pady=3,
             sticky=tk.NSEW,)
         #
-        self._trvw_dnses = ttk.Treeview(self._lfrm_dnses)
-        self._trvw_dnses.grid(
+        self._frm_dnsButns = tk.Frame(self._lfrm_dnses)
+        self._frm_dnsButns.grid(
             column=0,
             row=0,
             sticky=tk.NSEW,)
         #
-        self._frm_dnsButns = tk.Frame(self._lfrm_dnses)
-        self._frm_dnsButns.grid(
+        self._btn_addDns = ttk.Button(
+            self._frm_dnsButns,
+            image=self._IMG_ADD) # type: ignore
+        self._btn_addDns.pack(
+            side=tk.LEFT)
+        #
+        self._btn_removeDns = ttk.Button(
+            self._frm_dnsButns,
+            image=self._IMG_REMOVE) # type: ignore
+        self._btn_removeDns.pack(
+            side=tk.LEFT)
+        #
+        self._btn_editDns = ttk.Button(
+            self._frm_dnsButns,
+            image=self._IMG_EDIT) # type: ignore
+        self._btn_editDns.pack(
+            side=tk.LEFT)
+        #
+        self._btn_applyDns = ttk.Button(
+            self._frm_dnsButns,
+            image=self._IMG_APPLY) # type: ignore
+        self._btn_applyDns.pack(
+            side=tk.LEFT)
+        #
+        self._dnsvw = Dnsview(self._lfrm_dnses)
+        self._dnsvw.grid(
             column=0,
             row=1,
             sticky=tk.NSEW,)
-        #
-        self._btn_changeDns = ttk.Button(self._frm_dnsButns, text='Change')
-        self._btn_changeDns.pack(
-            side=tk.RIGHT)
-        #
-        self._btn_removeDns = ttk.Button(self._frm_dnsButns, text='Remove')
-        self._btn_removeDns.pack(
-            side=tk.RIGHT)
-        #
-        self._btn_addDns = ttk.Button(self._frm_dnsButns, text='Add')
-        self._btn_addDns.pack(
-            side=tk.RIGHT)
         #
         self._msgvw = MessageView(self._pdwin, self._IMG_CLOSE)
         self._msgvw.pack(fill=tk.BOTH, expand=1)
@@ -175,15 +212,20 @@ class DnsWin(tk.Tk):
         from ntwrk import GetInterfacesNames
         try:
             for name in GetInterfacesNames():
-                self._in
-        except TypeError:
+                pass
+        except TypeError as err:
             self._msgvw.AddMessage(
-                'Unable to read network interfaces names',
+                str(err),
+                title=err.__class__.__qualname__,
                 type_=MessageType.ERROR)
     
     def _OnWinClosing(self) -> None:
         # Releasing images...
         self._HIMG_CLOSE.close()
+        self._HIMG_ADD.close()
+        self._HIMG_REMOVE.close()
+        self._HIMG_EDIT.close()
+        self._HIMG_APPLY.close()
         #
         self._saveGeometry()
         self._settings.left_panel_width = self._pdwin.sashpos(0)
