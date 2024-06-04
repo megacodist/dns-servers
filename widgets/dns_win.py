@@ -258,4 +258,4 @@ class DnsWin(tk.Tk):
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
         a = DnsDialog(self)
-        print(a.dnsName, a.primary, a.secondary)
+        print(a.result)
