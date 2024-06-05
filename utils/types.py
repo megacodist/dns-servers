@@ -12,11 +12,60 @@ from threading import RLock
 from time import sleep
 from typing import Any
 
+import PIL.Image
 import PIL.ImageTk
 
 
 TkImg = PIL.ImageTk.PhotoImage
 """Tkinter compatible image type."""
+
+
+class GifImage:
+    """It is actually a list of `PIL.ImageTk.PhotoImage` to hold the
+    GIF frames. The objects of this class support zero-based integer
+    subscript notation for reading, not setting, GIF frames.
+    """
+    def __init__(self, gif: PathLike) -> None:
+        from PIL import ImageSequence
+        self._frames: list[TkImg] = []
+        """The frames of this GIF image."""
+        self._idx: int = 0
+        """The index of the next frame."""
+        self._HGIF_WAIT = PIL.Image.open(gif)
+        for frame in ImageSequence.Iterator(self._HGIF_WAIT):
+            frame = frame.convert("RGBA")
+            self._frames.append(PIL.ImageTk.PhotoImage(frame))
+    
+    def nextFrame(self) -> TkImg:
+        """Returns the next frame of this gif image. On consecutive
+        calls, this methods endlessly loops over all available frames
+        jumping from end to the first.
+        """
+        try:
+            frame = self._frames[self._idx]
+            self._idx += 1
+        except IndexError:
+            frame = self._frames[0]
+            self._idx = 1
+        return frame
+    
+    def close(self) -> None:
+        """Releases the GIF file."""
+        self._frames.clear()
+        del self._frames
+        self._HGIF_WAIT.close()
+        del self._HGIF_WAIT
+    
+    def __getitem__(self, __idx: int, /) -> TkImg:
+        return self._frames[__idx]
+    
+    def __del__(self) -> None:
+        if hasattr(self, '_frames'):
+            self._frames.clear()
+            del self._frames
+        if hasattr(self, '_HGIF_WAIT'):
+            self._HGIF_WAIT.close()
+            del self._HGIF_WAIT
 
 
 class InvalidFileError(Exception):

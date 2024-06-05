@@ -5,6 +5,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from ipaddress import IPv4Address
+from typing import MutableSequence
 
 
 class DnsServer:
@@ -29,4 +30,11 @@ class IDatabase(ABC):
     def selectDns(self, dns_name: str) -> DnsServer | None:
         """Selects and returns DNS server from the database with the
         specified name. Returns `None` if it does not exist."""
+        pass
+
+    @abstractmethod
+    def selctAllDnses(self) -> MutableSequence[DnsServer]:
+        """Returns a mutable sequence (typically a `list`) of all DNS
+        servers in the database.
+        """
         pass

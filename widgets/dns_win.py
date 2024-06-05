@@ -10,6 +10,8 @@ from tkinter import ttk
 import PIL.Image
 import PIL.ImageTk
 
+from db import IDatabase
+
 from .dns_view import Dnsview
 from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
@@ -18,7 +20,11 @@ from utils.types import TkImg
 
 
 class DnsWin(tk.Tk):
-    def __init__(self, res_dir: Path, settings: AppSettings) -> None:
+    def __init__(
+            self,
+            res_dir: Path,
+            settings: AppSettings,
+            db: IDatabase,) -> None:
         super().__init__(
             screenName=None,
             baseName=None,
@@ -34,6 +40,8 @@ class DnsWin(tk.Tk):
         """The directory of the resources."""
         self._settings = settings
         """The application settings object."""
+        self._db = db
+        """The database object."""
         # Images...
         self._HIMG_CLOSE: PIL.Image.Image
         self._HIMG_ADD: PIL.Image.Image
