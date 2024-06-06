@@ -4,6 +4,7 @@
 
 
 from collections import namedtuple
+from typing import MutableSequence
 
 
 def GetInterfacesAttrs() -> tuple[tuple[str, ...], ...]:
@@ -43,11 +44,11 @@ def GetInterfacesAttrs() -> tuple[tuple[str, ...], ...]:
     return tuple(interfaces)
 
 
-def GetInterfacesNames() -> tuple[str, ...]:
+def GetInterfacesNames() -> MutableSequence[str]:
     """Gets all the available interfaces names. It raises `TypeError`
     upon any failure.
     """
     try:
-        return tuple([inter.Name for inter in GetInterfacesAttrs()]) # type: ignore
+        return [inter.Name for inter in GetInterfacesAttrs()] # type: ignore
     except AttributeError:
         raise TypeError('Unable to read network interfaces names.')

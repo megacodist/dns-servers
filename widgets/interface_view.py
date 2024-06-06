@@ -4,6 +4,7 @@
 
 import tkinter as tk
 from tkinter import ttk
+from typing import Iterable
 
 
 class InterfaceView(tk.Frame):
@@ -39,3 +40,11 @@ class InterfaceView(tk.Frame):
             column=0,
             row=1,
             sticky=tk.EW)
+
+    def populate(self, items: Iterable[str]) -> None:
+        self.clear()
+        for item in items:
+            self._lstbx.insert(tk.END, item)
+    
+    def clear(self) -> None:
+        self._lstbx.delete(tk.FIRST, tk.END)

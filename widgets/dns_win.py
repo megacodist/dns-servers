@@ -2,10 +2,13 @@
 # 
 #
 
+from concurrent.futures import CancelledError, Future
 import logging
+from os import execv
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
+from typing import Callable, MutableSequence, TYPE_CHECKING
 
 import PIL.Image
 import PIL.ImageTk
@@ -15,8 +18,13 @@ from db import IDatabase
 from .dns_view import Dnsview
 from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
+from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
-from utils.types import TkImg
+from utils.types import GifImage, TkImg
+
+
+if TYPE_CHECKING:
+    _: Callable[[str], str]
 
 
 class DnsWin(tk.Tk):
@@ -42,7 +50,10 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         self._db = db
         """The database object."""
+        self._interfaces: MutableSequence[str]
+        """A `MutableSequence` of all network interfaces."""
         # Images...
+        self._GIF_WAIT: GifImage
         self._HIMG_CLOSE: PIL.Image.Image
         self._HIMG_ADD: PIL.Image.Image
         self._HIMG_REMOVE: PIL.Image.Image
@@ -59,11 +70,15 @@ class DnsWin(tk.Tk):
         self._initGui()
         self.update()
         self._pdwin.sashpos(0, self._settings.left_panel_width)
+        # The rest of initializing...
+        self._asyncMngr = AsyncOpManager(self, self._GIF_WAIT)
         # Bindings & events...
         self.protocol('WM_DELETE_WINDOW', self._OnWinClosing)
     
     def _loadRes(self) -> None:
-        # Loading 'close.png...
+        # Loading `wait.gif`...
+        self._GIF_WAIT = GifImage(self._RES_DIR / 'wait.gif')
+        # Loading `close.png`...
         self._HIMG_CLOSE = PIL.Image.open(self._RES_DIR / 'close.png')
         self._HIMG_CLOSE = self._HIMG_CLOSE.resize(size=(16, 16,))
         self._IMG_CLOSE = PIL.ImageTk.PhotoImage(image=self._HIMG_CLOSE)
@@ -217,19 +232,9 @@ class DnsWin(tk.Tk):
         self._msgvw.pack(fill=tk.BOTH, expand=1)
         self._pdwin.add(self._msgvw, weight=1)
     
-    def _readInterfaces(self) -> None:
-        from ntwrk import GetInterfacesNames
-        try:
-            for name in GetInterfacesNames():
-                pass
-        except TypeError as err:
-            self._msgvw.AddMessage(
-                str(err),
-                title=err.__class__.__qualname__,
-                type_=MessageType.ERROR)
-    
     def _OnWinClosing(self) -> None:
         # Releasing images...
+        self._GIF_WAIT.close()
         self._HIMG_CLOSE.close()
         self._HIMG_ADD.close()
         self._HIMG_REMOVE.close()
@@ -262,6 +267,41 @@ class DnsWin(tk.Tk):
         else:
             logging.error(
                 'Cannot get the geometry of the window.', stack_info=True)
+    
+    def _initViews(self) -> None:
+        """Initializes the interface view and the """
+        self._loadInterfaces()
+        self._loadDnses()
+    
+    def _loadInterfaces(self) -> None:
+        from utils.funcs import listInterfaces
+        self._asyncMngr.InitiateOp(
+            start_cb=listInterfaces,
+            finish_cb=self._onInterfacesLoaded,
+            widgets=(self._intervw,))
+    
+    def _onInterfacesLoaded(self, fut: Future[MutableSequence[str]]) -> None:
+        try:
+            self._interfaces = fut.result()
+            self._intervw.populate(self._interfaces)
+        except CancelledError:
+            self._msgvw.AddMessage(
+                _('LOADING_INTERFACES_CANCELED'),
+                type_=MessageType.INFO)
+        except TypeError as err:
+            self._msgvw.AddMessage(
+                str(err),
+                title=err.__class__.__qualname__,
+                type_=MessageType.ERROR)
+    
+    def _loadDnses(self) -> None:
+        from utils.funcs import listDnses
+        self._asyncMngr.InitiateOp(
+            start_cb=listDnses,
+            start_args=(self._db,))
+
+    def _onDnsesLoaded(self) -> None:
+        pass
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog

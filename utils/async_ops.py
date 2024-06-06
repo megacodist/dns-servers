@@ -11,7 +11,7 @@ from queue import Queue, Empty
 from threading import RLock
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, Callable, Iterable, TypeVar, ParamSpec
+from typing import Any, Callable, Concatenate, Iterable, TypeVar, ParamSpec
 
 from utils.types import GifImage
 
@@ -34,8 +34,19 @@ class AfterOpStatus(enum.IntEnum):
     """The operation was canceled."""
 
 
-_ReturnType = TypeVar('_ReturnType')
-_Param = ParamSpec('_Param')
+_R = TypeVar('_R')
+"""The return type of start callback of `AsyncOpManager` class."""
+
+_SPrm = ParamSpec('_SPrm')
+"""This parameter specification along with an optional initial `Queue`
+object constitutes the parameter specification of start callback of
+`AsyncOpManager` class.
+"""
+
+_CPrm = ParamSpec('_CPrm')
+"""Specifies the parameter specification of cancel callback of
+`AsyncOpManager` class.
+"""
 
 
 class AsyncOp:
@@ -62,20 +73,20 @@ class AsyncOp:
 
     def __init__(
             self,
-            thrd_pool: ThreadPoolExecutor,
-            q: Queue | None,
-            start_cb: Callable[[Queue, _Param], _ReturnType],
+            thrd_Sprmool: ThreadPoolExecutor,
+            q: Queue[str] | None,
+            start_cb: Callable[Concatenate[Queue[str] | None, _SPrm], _R],
             start_args: tuple[Any, ...] = (),
             start_kwargs: dict[str, Any] | None = None,
-            finish_cb: Callable[[Future[_ReturnType]], None] | None = None,
-            cancel_cb: Callable[_Param, None] | None = None,
+            finish_cb: Callable[[Future[_R]], None] | None = None,
+            cancel_cb: Callable[_CPrm, None] | None = None,
             cancel_args: tuple[Any, ...] = (),
             cancel_kwargs: dict[str, Any] | None = None,
             widgets: Iterable[tk.Widget] = (),
             ) -> None:
         self._hash = AsyncOp._GetHash()
         """The unique hash of this instance."""
-        self._thrdPool = thrd_pool
+        self._thrdPool = thrd_Sprmool
         """The Async I/O thread."""
         self.cbStart = start_cb
         """The callback which starts this async operation."""
@@ -99,7 +110,7 @@ class AsyncOp:
         """The widgets that this operation has a effect on them."""
         self._q = q
         """Messaging queue for the asynchronous operation."""
-        self._future: Future | None = None
+        self._future: Future[_R] | None = None
         """The future object which represents the due result of this
         asynchronous operation.
         """
@@ -108,10 +119,10 @@ class AsyncOp:
     
     def Start(self) -> None:
         """Starts this asynchronous ('after') operation."""
-        args = tuple([self._q, *self.startArgs])
         self._future = self._thrdPool.submit(
             self.cbStart,
-            *args,
+            self._q,
+            *self.startArgs,
             **self.startKwargs)
         self._status = AfterOpStatus.RUNNING
     
@@ -178,7 +189,7 @@ class _WidgetAssets:
             ) -> None:
         self.widget = widget
         """The `Widget` that this object holds its assets."""
-        self.q = Queue()
+        self.q = Queue[str]()
         """The messaging queue associated with this widget."""
         self.ops: set[AsyncOp] = set()
         """The operations associated with this widget."""
@@ -232,11 +243,11 @@ class AsyncOpManager:
 
     def InitiateOp(
             self,
-            start_cb: Callable[_Param, _ReturnType],
+            start_cb: Callable[Concatenate[Queue[str] | None, _SPrm], _R],
             start_args: tuple[Any, ...] = (),
             start_kwargs: dict[str, Any] | None = None,
-            finish_cb: Callable[[Future[_ReturnType]], None] | None = None,
-            cancel_cb: Callable[_Param, None] | None = None,
+            finish_cb: Callable[[Future[_R]], None] | None = None,
+            cancel_cb: Callable[_CPrm, None] | None = None,
             cancel_args: tuple[Any, ...] = (),
             cancel_kwargs: dict[str, Any] | None = None,
             widgets: Iterable[tk.Widget] = (),
@@ -294,17 +305,21 @@ class AsyncOpManager:
         finishedOps: set[AsyncOp] = set()
         canceledOps: set[AsyncOp] = set()
         for asyncOp in self._asyncOps:
-            if asyncOp.HasCanceled():
-                canceledOps.add(asyncOp)
-            elif asyncOp.HasDone():
-                finishedOps.add(asyncOp)
+            try:
+                if asyncOp.HasCanceled():
+                    canceledOps.add(asyncOp)
+                elif asyncOp.HasDone():
+                    finishedOps.add(asyncOp)
+            except OpNotStartedError:
+                continue
         # Processinf finished async ops...
         if finishedOps:
             for asyncOp in finishedOps:
                 asyncOp._status = AfterOpStatus.FINISHED
                 for widget in asyncOp._widgets:
                     self._widgets[widget].ops.remove(asyncOp)
-                asyncOp.cbFinished(asyncOp._future)
+                if asyncOp.cbFinished:
+                    asyncOp.cbFinished(asyncOp._future) # type: ignore
             self._asyncOps.difference_update(finishedOps)
         # Processinf canceled async ops...
         if canceledOps:
@@ -342,13 +357,12 @@ class WaitFrame(ttk.Frame):
             self,
             master: tk.Misc,
             wait_gif: GifImage,
-            q: Queue,
+            q: Queue[str],
             assets: _WidgetAssets,
             **kwargs
             ) -> None:
         super().__init__(master, **kwargs)
-        self['relief'] = tk.RIDGE
-
+        self.config(relief=tk.RIDGE)
         # Storing inbound references...
         self._master = master
         self._GIF_WAIT = wait_gif
@@ -356,14 +370,13 @@ class WaitFrame(ttk.Frame):
         self._assets = assets
         self._afterID: str | None = None
         self._TIME_AFTER = 40
-
         # Configuring the grid geometry manager...
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         #
         self._lbl_wait = ttk.Label(
             master=self,
-            image=self._GIF_WAIT[0])
+            image=self._GIF_WAIT[0]) # type: ignore
         self._lbl_wait.grid(
             column=0,
             row=0,
@@ -407,7 +420,8 @@ class WaitFrame(ttk.Frame):
 
     def Close(self) -> None:
         """Closes this WaitFrame."""
-        self.after_cancel(self._afterID)
+        if self._afterID:
+            self.after_cancel(self._afterID)
         self.place_forget()
         self.destroy()
     
