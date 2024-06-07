@@ -18,6 +18,21 @@ class DnsServer:
         self._name = name
         self._primary = primary
         self._secondary = secondary
+    
+    @property
+    def name(self) -> str:
+        """Gets the name of the DNS server."""
+        return self._name
+    
+    @property
+    def primary(self) -> IPv4Address:
+        """Gets the primary IP of the DNS server."""
+        return self._primary
+    
+    @property
+    def secondary(self) -> IPv4Address | None:
+        """Gets the secondary IP of the DNS server."""
+        return self._secondary
 
 
 class IDatabase(ABC):

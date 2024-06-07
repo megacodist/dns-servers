@@ -4,6 +4,7 @@
 
 
 from collections import namedtuple
+from ipaddress import IPv4Address
 from typing import MutableSequence
 
 
@@ -52,3 +53,7 @@ def GetInterfacesNames() -> MutableSequence[str]:
         return [inter.Name for inter in GetInterfacesAttrs()] # type: ignore
     except AttributeError:
         raise TypeError('Unable to read network interfaces names.')
+
+
+def GetDnsServersIPv4(name: str) -> tuple[IPv4Address, IPv4Address]:
+    pass

@@ -13,13 +13,14 @@ from typing import Callable, MutableSequence, TYPE_CHECKING
 import PIL.Image
 import PIL.ImageTk
 
-from db import IDatabase
+from db import DnsServer, IDatabase
 
 from .dns_view import Dnsview
 from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
 from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
+from utils.sorted_list import SortedList
 from utils.types import GifImage, TkImg
 
 
@@ -40,7 +41,7 @@ class DnsWin(tk.Tk):
             useTk=True,
             sync=False,
             use=None)
-        self.title('DNS server manager')
+        self.title(_('APP_NAME'))
         self.geometry(f'{settings.win_width}x{settings.win_height}+'
             f'{settings.win_x}+{settings.win_y}')
         #
@@ -52,6 +53,8 @@ class DnsWin(tk.Tk):
         """The database object."""
         self._interfaces: MutableSequence[str]
         """A `MutableSequence` of all network interfaces."""
+        self._dnses: MutableSequence[DnsServer]
+        self._dnsNames = SortedList[str]()
         # Images...
         self._GIF_WAIT: GifImage
         self._HIMG_CLOSE: PIL.Image.Image
@@ -74,6 +77,8 @@ class DnsWin(tk.Tk):
         self._asyncMngr = AsyncOpManager(self, self._GIF_WAIT)
         # Bindings & events...
         self.protocol('WM_DELETE_WINDOW', self._OnWinClosing)
+        # Initializes views...
+        self._initViews()
     
     def _loadRes(self) -> None:
         # Loading `wait.gif`...
@@ -133,7 +138,7 @@ class DnsWin(tk.Tk):
         #
         self._lfrm_interfaces = ttk.Labelframe(
             self._frm_interDnses,
-            text='Interfaces')
+            text=_('INTERFACES'))
         self._lfrm_interfaces.grid(
             column=0,
             row=0,
@@ -153,7 +158,9 @@ class DnsWin(tk.Tk):
             pady=3,
             sticky=tk.NSEW,)
         #
-        self._lbl_primary = ttk.Label(self._lfrm_interDnses, text='Primary')
+        self._lbl_primary = ttk.Label(
+            self._lfrm_interDnses,
+            text=_('PRIMARY'))
         self._lbl_primary.grid(
             column=0,
             row=0,
@@ -167,7 +174,7 @@ class DnsWin(tk.Tk):
         #
         self._lbl_secondary = ttk.Label(
             self._lfrm_interDnses,
-            text='Secondary')
+            text=_('SECONDARY'))
         self._lbl_secondary.grid(
             column=0,
             row=2,
@@ -181,7 +188,7 @@ class DnsWin(tk.Tk):
         #
         self._lfrm_dnses = ttk.Labelframe(
             self._frm_leftPanel,
-            text='DNS servers')
+            text=_('DNS_SERVERS'))
         self._lfrm_dnses.columnconfigure(0, weight=1)
         self._lfrm_dnses.rowconfigure(1, weight=1)
         self._lfrm_dnses.grid(
@@ -271,7 +278,7 @@ class DnsWin(tk.Tk):
     def _initViews(self) -> None:
         """Initializes the interface view and the """
         self._loadInterfaces()
-        self._loadDnses()
+        #self._loadDnses()
     
     def _loadInterfaces(self) -> None:
         from utils.funcs import listInterfaces
@@ -294,16 +301,28 @@ class DnsWin(tk.Tk):
                 title=err.__class__.__qualname__,
                 type_=MessageType.ERROR)
     
+    def _changeInterface(self, idx: int) -> None:
+        pass
+    
     def _loadDnses(self) -> None:
         from utils.funcs import listDnses
         self._asyncMngr.InitiateOp(
             start_cb=listDnses,
-            start_args=(self._db,))
+            start_args=(self._db,),
+            finish_cb=self._onDnsesLoaded)
 
-    def _onDnsesLoaded(self) -> None:
-        pass
+    def _onDnsesLoaded(self, fut: Future[MutableSequence[DnsServer]]) -> None:
+        try:
+            self._dnses = fut.result()
+            self._dnsNames.items = [dns.name for dns in self._dnses]
+            self._dnsvw.populate(self._dnses)
+        except CancelledError:
+            self._msgvw.AddMessage(
+                _('LOADING_DNSES_CANCELED'),
+                type_=MessageType.INFO)
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
-        a = DnsDialog(self)
-        print(a.result)
+        a = DnsDialog(self, self._dnsNames)
+        if a.result:
+            self._dnsvw.addDns(a.result)

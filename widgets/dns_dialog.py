@@ -26,10 +26,20 @@ class DnsDialog(TkSimpleDialog.Dialog):
         """The gathered DNS server information. If dialog is canceled, it
         will be `None`."""
         self._dnsNames: SortedList[str] = dns_names
-        self._svarName = tk.StringVar(self, name)
-        self._svarPrim = tk.StringVar(self, primary)
-        self._svarSecod = tk.StringVar(self, secondary)
+        self._svarName: tk.StringVar | None = None
+        self._svarPrim: tk.StringVar | None = None
+        self._svarSecod: tk.StringVar | None = None
+        self._status = {
+            'name': False,
+            'primary': False,
+            'secondary': True,}
         super().__init__(parent, 'Enter DNS server')
+        if self._svarName is not None:
+            self._svarName.set(name)
+        if self._svarPrim is not None:
+            self._svarPrim.set(primary)
+        if self._svarSecod is not None:
+            self._svarSecod.set(secondary)
         self.after(10, self._validateInitials)
     
     def body(self, master: tk.Frame) -> tk.Widget:
@@ -42,7 +52,12 @@ class DnsDialog(TkSimpleDialog.Dialog):
             foreground=self._invalidColor)
         self._lbl_name.grid(column=0, row=0, padx=2, pady=2, sticky=tk.E)
         #
-        self._entry_name = ttk.Entry(master, textvariable=self._svarName)
+        self._svarName = tk.StringVar(master)
+        self._entry_name = ttk.Entry(
+            master,
+            textvariable=self._svarName,
+            validate='key',
+            validatecommand=(self.register(self._validateName), '%P'))
         self._entry_name.grid(column=1, row=0, padx=2, pady=2, sticky=tk.NSEW)
         #
         self._lbl_primary = ttk.Label(
@@ -51,6 +66,7 @@ class DnsDialog(TkSimpleDialog.Dialog):
             foreground=self._invalidColor)
         self._lbl_primary.grid(column=0, row=1, padx=2, pady=2, sticky=tk.E)
         #
+        self._svarPrim = tk.StringVar(master)
         self._entry_primary = ttk.Entry(
             master,
             textvariable=self._svarPrim,
@@ -69,6 +85,7 @@ class DnsDialog(TkSimpleDialog.Dialog):
             foreground=self._validColor)
         self._lbl_secondary.grid(column=0, row=2, padx=2, pady=2, sticky=tk.E)
         #
+        self._svarSecod = tk.StringVar(master)
         self._entry_secondary = ttk.Entry(
             master,
             textvariable=self._svarSecod,
@@ -90,7 +107,6 @@ class DnsDialog(TkSimpleDialog.Dialog):
             self._btnsBar,
             text="OK",
             width=10,
-            state=tk.DISABLED,
             command=self.ok,
             default=tk.ACTIVE)
         self._btn_ok.pack(side=tk.LEFT, padx=5, pady=5)
@@ -116,36 +132,59 @@ class DnsDialog(TkSimpleDialog.Dialog):
             primary,
             secondary)
     
+    def validate(self):
+        return all(self._status[key] for key in self._status)
+    
+    def ok(self, event=None):
+        if self.validate():
+            self.result = DnsServer(
+                self._svarName.get(),
+                IPv4Address(self._svarPrim.get()),
+                IPv4Address(self._svarSecod.get()) if self._svarSecod.get() \
+                    else None)
+            self.apply()
+            self.withdraw()
+            self.update_idletasks()
+            self.cancel()
+
+    def cancel(self, event=None):
+        print("Custom Cancel behavior")
+        super().cancel(event)
+    
     def _validateInitials(self) -> None:
-        self._validatePrimary(self._svarPrim.get())
-        self._validateSecond(self._svarSecod.get())
-        self._btn_ok.config(state=tk.NORMAL)
+        self._validateName(self._svarName.get()) # type: ignore
+        self._validatePrimary(self._svarPrim.get()) # type: ignore
+        self._validateSecond(self._svarSecod.get()) # type: ignore
+        #self._btn_ok.config(state=tk.NORMAL)
     
     def _validateName(self, text: str) -> bool:
         text = text.strip()
-        self._svarName.set(text)
         if text and (not text in self._dnsNames):
             self._lbl_name.config(foreground=self._validColor)
+            self._status['name'] = True
         else:
-            self._lbl_primary.config(foreground=self._invalidColor)
+            self._lbl_name.config(foreground=self._invalidColor)
+            self._status['name'] = False
         return True
     
     def _validatePrimary(self, text: str) -> bool:
         text = text.strip()
-        self._svarPrim.set(text)
         try:
             IPv4Address(text)
             self._lbl_primary.config(foreground=self._validColor)
+            self._status['primary'] = True
         except AddressValueError:
             self._lbl_primary.config(foreground=self._invalidColor)
+            self._status['primary'] = False
         return True
     
     def _validateSecond(self, text: str) -> bool:
         text = text.strip()
-        self._svarSecod.set(text)
         try:
             if text == '' or IPv4Address(text):
                 self._lbl_secondary.config(foreground=self._validColor)
+                self._status['secondary'] = True
         except AddressValueError:
             self._lbl_secondary.config(foreground=self._invalidColor)
+            self._status['secondary'] = False
         return True

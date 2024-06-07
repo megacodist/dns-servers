@@ -17,8 +17,38 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+msgid "APP_NAME"
+msgstr "DNS server manager"
+
+msgid "INTERFACES"
+msgstr "Interfaces"
+
+msgid "PRIMARY"
+msgstr "Primary"
+
+msgid "SECONDARY"
+msgstr "Secondary"
+
+msgid "DNS_SERVERS"
+msgstr "DNS servers"
+
+msgid "LOADING_SETTINGS"
+msgstr "Loading settings..."
+
+msgid "INVALID_SETTINGS_FILE"
+msgstr "Invalid settings file, using defaults"
+
+msgid "CREATING_WIN"
+msgstr "Creating app window..."
+
 msgid "LOADING_INTERFACES_CANCELED"
-msgstr "Loading network interfaces canceled."
+msgstr "Loading network interfaces was canceled."
 
 msgid "LOADING_INTERFACES"
 msgstr "Loading network interfaces"
+
+msgid "LOADING_DNSES"
+msgstr "Loading DNSes"
+
+msgid "LOADING_DNSES_CANCELED"
+msgstr "Loading DNS servers was canceled."

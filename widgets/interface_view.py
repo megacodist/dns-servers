@@ -47,4 +47,4 @@ class InterfaceView(tk.Frame):
             self._lstbx.insert(tk.END, item)
     
     def clear(self) -> None:
-        self._lstbx.delete(tk.FIRST, tk.END)
+        self._lstbx.delete(0, tk.END)

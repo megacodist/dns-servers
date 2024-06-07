@@ -67,7 +67,7 @@ class _MessageItem(tk.Canvas):
             self,
             master: tk.Misc,
             close_img: TkImg,
-            close_cb: Callable[[], None],
+            close_cb: Callable[[_MessageData], None],
             *,
             img_size: int = 16,
             **kwargs
@@ -91,7 +91,7 @@ class _MessageItem(tk.Canvas):
         self._lbl_close = ttk.Label(
             self,
             cursor='hand1',
-            image=self._IMG_CLOSE,
+            image=self._IMG_CLOSE, # type: ignore
             width=self._imgSize)
         # Binding events...
         self._lbl_close.bind("<Button-1>", self._OnCloseClicked)
