@@ -278,7 +278,7 @@ class DnsWin(tk.Tk):
     def _initViews(self) -> None:
         """Initializes the interface view and the """
         self._loadInterfaces()
-        #self._loadDnses()
+        self._loadDnses()
     
     def _loadInterfaces(self) -> None:
         from utils.funcs import listInterfaces
@@ -323,6 +323,19 @@ class DnsWin(tk.Tk):
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
-        a = DnsDialog(self, self._dnsNames)
-        if a.result:
-            self._dnsvw.addDns(a.result)
+        dnsDialog = DnsDialog(self, self._dnsNames)
+        dns = dnsDialog.showDialog()
+        if dns:
+            self._dnses.append(dns)
+            self._dnsNames.add(dns.name)
+            self._db.insertDns(dns)
+            self._dnsvw.appendDns(dns)
+    
+    def _deleteDns(self) -> None:
+        dnsName = self._dnsvw.getSetectedName()
+        if dnsName is None:
+            self._msgvw.AddMessage(
+                _('SELECT_ITEM_DNS_VIEW'),
+                type_=MessageType.WARNING)
+            return
+        dnsIdx = self._dnsNames.index(dnsName)

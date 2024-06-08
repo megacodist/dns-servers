@@ -2,11 +2,16 @@
 # 
 #
 
+import logging
 import tkinter as tk
 from tkinter import ttk
-from typing import MutableSequence
+from typing import Callable, MutableSequence, TYPE_CHECKING
 
 from db import DnsServer
+
+
+if TYPE_CHECKING:
+    _: Callable[[str], str] = lambda a: a
 
 
 class Dnsview(tk.Frame):
@@ -49,20 +54,46 @@ class Dnsview(tk.Frame):
         self._trvw.column(1, anchor=tk.W, width=100, stretch=False)
         self._trvw.column(2, anchor=tk.W, width=100, stretch=False)
         # Create column headings
-        self._trvw.heading('#0', text="", anchor=tk.W)  # Hidden heading for tree structure
-        self._trvw.heading(0, text="Name", anchor=tk.W)
-        self._trvw.heading(1, text="Primary", anchor=tk.W)
-        self._trvw.heading(2, text="Secondary", anchor=tk.W)
+        self._trvw.heading('#0', text='', anchor=tk.W)  # Hidden heading for tree structure
+        self._trvw.heading(0, text=_('NAME'), anchor=tk.W)
+        self._trvw.heading(1, text=_('PRIMARY'), anchor=tk.W)
+        self._trvw.heading(2, text=_('SECONDARY'), anchor=tk.W)
+    
+    def clear(self) -> None:
+        """Clears all DNS servers from the View."""
+        for child in self._trvw.get_children():
+            self._trvw.delete(child)
+    
+    def getSetectedName(self) -> str | None:
+        """Gets the name of the selected DNS server in the View. If
+        nothing is selected, it returns `None`."""
+        selection = self._trvw.selection()
+        match len(selection):
+            case 0:
+                return None
+            case 1:
+                return self._trvw.item(selection[0], 'text')
+            case _:
+                logging.error(
+                    'more than one item in the Dnsview is selected',
+                    stack_info=True,)
     
     def populate(self, dnses: MutableSequence[DnsServer]) -> None:
+        self.clear()
         for dns in dnses:
             self._trvw.insert(
                 parent='',
                 index=tk.END,
-                values=(dns.name, dns.primary, dns.secondary))
+                values=(
+                    dns.name,
+                    str(dns.primary),
+                    '' if dns.secondary is None else str(dns.secondary)))
     
-    def addDns(self, dns: DnsServer) -> None:
+    def appendDns(self, dns: DnsServer) -> None:
         self._trvw.insert(
             parent='',
             index=tk.END,
-            values=(dns.name, dns.primary, dns.secondary))
+            values=(
+                dns.name,
+                str(dns.primary),
+                '' if dns.secondary is None else str(dns.secondary)))

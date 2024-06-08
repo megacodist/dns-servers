@@ -49,6 +49,7 @@ def main() -> None:
         dnsWin = DnsWin(_RES_DIR, _settings, db)
         dnsWin.mainloop()
     finally:
+        db.close()
         _settings.Save()
 
 

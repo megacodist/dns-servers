@@ -23,6 +23,9 @@ msgstr "DNS server manager"
 msgid "INTERFACES"
 msgstr "Interfaces"
 
+msgid "NAME"
+msgstr "Name"
+
 msgid "PRIMARY"
 msgstr "Primary"
 
@@ -52,3 +55,9 @@ msgstr "Loading DNSes"
 
 msgid "LOADING_DNSES_CANCELED"
 msgstr "Loading DNS servers was canceled."
+
+msgid "ENTER_DNS"
+msgstr "Enter a DNS server"
+
+msgid "SELECT_ITEM_DNS_VIEW"
+msgstr "Select an item in the DNS servers."

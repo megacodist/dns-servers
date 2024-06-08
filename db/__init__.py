@@ -33,6 +33,12 @@ class DnsServer:
     def secondary(self) -> IPv4Address | None:
         """Gets the secondary IP of the DNS server."""
         return self._secondary
+    
+    def __repr__(self) -> str:
+        second = f', secondary={str(self._secondary)}' if self._secondary \
+            else ''
+        return (f'<{self.__class__.__qualname__} name={self._name}, '
+            f'primary={self._primary}{second}>')
 
 
 class IDatabase(ABC):
@@ -52,4 +58,9 @@ class IDatabase(ABC):
         """Returns a mutable sequence (typically a `list`) of all DNS
         servers in the database.
         """
+        pass
+
+    @abstractmethod
+    def insertDns(self, dns: DnsServer) -> None:
+        """Inserts the specified DNS server object into the database."""
         pass
