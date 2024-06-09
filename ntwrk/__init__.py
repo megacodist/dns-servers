@@ -57,3 +57,23 @@ def GetInterfacesNames() -> MutableSequence[str]:
 
 def GetDnsServersIPv4(name: str) -> tuple[IPv4Address, IPv4Address]:
     pass
+
+def GetDnsServers(name: str) -> str:
+    import subprocess
+    command = ["ip", "addr", "show", name]
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        output, error = process.communicate()
+        if error:
+            raise subprocess.CalledProcessError(
+                returncode=process.returncode,
+                cmd=command,
+                output=error)
+    except subprocess.CalledProcessError as e:
+        print(f"Error: {e}")
+        return []
+    else:
+        return output

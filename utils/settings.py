@@ -11,3 +11,6 @@ class AppSettings(types_module.AppSettings):
     win_width = 600
     win_height = 450
     left_panel_width = 220
+    name_col_width = 100
+    primary_col_width = 100
+    secondary_col_width = 100

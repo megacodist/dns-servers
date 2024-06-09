@@ -25,9 +25,7 @@ class DnsDialog(tk.Toplevel):
             self,
             master: tk.Misc,
             dns_names: SortedList[str],
-            name: str = '',
-            primary: str = '',
-            secondary: str = '',
+            dns: DnsServer | None = None,
             ) -> None:
         super().__init__(master)
         self.title(_('ENTER_DNS'))
@@ -40,9 +38,20 @@ class DnsDialog(tk.Toplevel):
         """The gathered DNS server information. If dialog is canceled, it
         will be `None`."""
         self._dnsNames: SortedList[str] = dns_names
-        self._svarName = tk.StringVar(self, name)
-        self._svarPrim = tk.StringVar(self, primary)
-        self._svarSecod = tk.StringVar(self, secondary)
+        if dns is None:
+            self._svarName = tk.StringVar(self, '')
+            self._svarPrim = tk.StringVar(self, '')
+            self._svarSecod = tk.StringVar(self, '')
+        elif isinstance(dns, DnsServer):
+            self._svarName = tk.StringVar(self, dns.name)
+            self._svarPrim = tk.StringVar(self, str(dns.primary))
+            self._svarSecod = tk.StringVar(
+                self,
+                '' if dns.secondary is None else str(dns.secondary))
+        else:
+            raise TypeError("'dns' argument of the initializer of "
+                f"{self.__class__.__qualname__} must be either None "
+                f"or {DnsServer.__qualname__}")
         self._fields = {
             'name': _DataStatus(None, False),
             'primary': _DataStatus(None, False),

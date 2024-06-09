@@ -4,13 +4,21 @@
 
 import tkinter as tk
 from tkinter import ttk
-from typing import Iterable
+from typing import Callable, Iterable
 
 
 class InterfaceView(tk.Frame):
-    def __init__(self, master: tk.Misc, **kwargs) -> None:
+    def __init__(
+            self,
+            master: tk.Misc,
+            selection_cb: Callable[[int], None] | None = None,
+            **kwargs,
+            ) -> None:
         super().__init__(master, **kwargs)
+        self._cbSelection = selection_cb
         self._initGui()
+        # Bindings...
+        self._lstbx.bind("<<ListboxSelect>>", self._onSelection)
     
     def _initGui(self) -> None:
         self.columnconfigure(0, weight=1)
@@ -40,6 +48,11 @@ class InterfaceView(tk.Frame):
             column=0,
             row=1,
             sticky=tk.EW)
+    
+    def _onSelection(self, event: tk.Event) -> None:
+        selection = self._lstbx.curselection()
+        if self._cbSelection:
+            self._cbSelection(selection[0])
 
     def populate(self, items: Iterable[str]) -> None:
         self.clear()

@@ -72,3 +72,29 @@ class SqliteDb(IDatabase):
                 int(dns.primary),
                 int(dns.secondary) if dns.secondary else None))
         self._conn.commit()
+    
+    def deleteDns(self, dns_name: str) -> None:
+        sql = """
+            DELETE FROM
+                dns_servers
+            WHERE
+                name = ?
+        """
+        cur = self._conn.cursor()
+        cur = cur.execute(sql, (dns_name,))
+        self._conn.commit()
+    
+    def updateDns(self, dns_name: str, new_dns: DnsServer) -> None:
+        sql = """
+            UPDATE
+                dns_servers
+            SET
+                name = ?, primary_ = ?, secondary = ?
+            WHERE
+                name = ?
+        """
+        cur = self._conn.cursor()
+        cur = cur.execute(
+            sql,
+            (new_dns.name, new_dns.primary, new_dns.secondary, dns_name))
+        self._conn.commit()

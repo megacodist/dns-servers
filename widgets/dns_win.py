@@ -76,7 +76,7 @@ class DnsWin(tk.Tk):
         # The rest of initializing...
         self._asyncMngr = AsyncOpManager(self, self._GIF_WAIT)
         # Bindings & events...
-        self.protocol('WM_DELETE_WINDOW', self._OnWinClosing)
+        self.protocol('WM_DELETE_WINDOW', self._onWinClosing)
         # Initializes views...
         self._initViews()
     
@@ -138,7 +138,7 @@ class DnsWin(tk.Tk):
         #
         self._lfrm_interfaces = ttk.Labelframe(
             self._frm_interDnses,
-            text=_('INTERFACES'))
+            text=_('NET_INTERS'))
         self._lfrm_interfaces.grid(
             column=0,
             row=0,
@@ -146,7 +146,9 @@ class DnsWin(tk.Tk):
             pady=3,
             sticky=tk.NSEW,)
         #
-        self._intervw = InterfaceView(self._lfrm_interfaces)
+        self._intervw = InterfaceView(
+            self._lfrm_interfaces,
+            self._onInterfaceChanged)
         self._intervw.pack(fill=tk.BOTH, expand=1)
         #
         self._lfrm_interDnses = ttk.Labelframe(self._frm_interDnses)
@@ -211,14 +213,16 @@ class DnsWin(tk.Tk):
         self._btn_addDns.pack(
             side=tk.LEFT)
         #
-        self._btn_removeDns = ttk.Button(
+        self._btn_deleteDns = ttk.Button(
             self._frm_dnsButns,
+            command=self._deleteDns,
             image=self._IMG_REMOVE) # type: ignore
-        self._btn_removeDns.pack(
+        self._btn_deleteDns.pack(
             side=tk.LEFT)
         #
         self._btn_editDns = ttk.Button(
             self._frm_dnsButns,
+            command=self._editDns,
             image=self._IMG_EDIT) # type: ignore
         self._btn_editDns.pack(
             side=tk.LEFT)
@@ -229,7 +233,12 @@ class DnsWin(tk.Tk):
         self._btn_applyDns.pack(
             side=tk.LEFT)
         #
-        self._dnsvw = Dnsview(self._lfrm_dnses)
+        self._dnsvw = Dnsview(
+            self._lfrm_dnses,
+            self._editDns,
+            name_col_width=self._settings.name_col_width,
+            primary_col_width=self._settings.primary_col_width,
+            secondary_col_width=self._settings.secondary_col_width)
         self._dnsvw.grid(
             column=0,
             row=1,
@@ -239,7 +248,7 @@ class DnsWin(tk.Tk):
         self._msgvw.pack(fill=tk.BOTH, expand=1)
         self._pdwin.add(self._msgvw, weight=1)
     
-    def _OnWinClosing(self) -> None:
+    def _onWinClosing(self) -> None:
         # Releasing images...
         self._GIF_WAIT.close()
         self._HIMG_CLOSE.close()
@@ -250,6 +259,10 @@ class DnsWin(tk.Tk):
         #
         self._saveGeometry()
         self._settings.left_panel_width = self._pdwin.sashpos(0)
+        colsWidth = self._dnsvw.getColsWidth()
+        self._settings.name_col_width = colsWidth[0]
+        self._settings.primary_col_width = colsWidth[1]
+        self._settings.secondary_col_width = colsWidth[2]
         # Destroying the window...
         self.destroy()
     
@@ -279,6 +292,9 @@ class DnsWin(tk.Tk):
         """Initializes the interface view and the """
         self._loadInterfaces()
         self._loadDnses()
+    
+    def _onInterfaceChanged(self, idx: int) -> None:
+        pass
     
     def _loadInterfaces(self) -> None:
         from utils.funcs import listInterfaces
@@ -332,10 +348,47 @@ class DnsWin(tk.Tk):
             self._dnsvw.appendDns(dns)
     
     def _deleteDns(self) -> None:
-        dnsName = self._dnsvw.getSetectedName()
-        if dnsName is None:
+        from tkinter.messagebox import askyesno
+        dnsIdx = self._dnsvw.getSetectedIdx()
+        if dnsIdx is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
-        dnsIdx = self._dnsNames.index(dnsName)
+        dnsName = self._dnses[dnsIdx].name
+        response = askyesno(message=_('CONFIRM_DEL_DNS').format(dnsName))
+        if response is False:
+            return
+        del self._dnses[dnsIdx]
+        del self._dnsNames[self._dnsNames.index(dnsName)[1]] # type: ignore
+        self._db.deleteDns(dnsName)
+        self._dnsvw.deleteIdx(dnsIdx)
+    
+    def _editDns(self) -> None:
+        from .dns_dialog import DnsDialog
+        idx = self._dnsvw.getSetectedIdx()
+        if idx is None:
+            self._msgvw.AddMessage(
+                _('SELECT_ITEM_DNS_VIEW'),
+                type_=MessageType.WARNING)
+            return
+        dnsName = self._dnses[idx].name
+        slstIdx = self._dnsNames.index(dnsName)[1]
+        if isinstance(slstIdx, slice):
+            logging.error('E-1', dnsName, stack_info=True)
+            msg = _('DEL_DNS').format(dnsName)
+            words = msg.split()
+            words[0] = words[0].lower()
+            msg = ' '.join(words)
+            msg = _('ERROR').format(msg)
+            self._msgvw.AddMessage(msg, 'E-1', MessageType.ERROR)
+            return
+        dnsDialog = DnsDialog(self, self._dnsNames, self._dnses[idx])
+        dns = dnsDialog.showDialog()
+        if dns is None:
+            return
+        self._dnses[idx] = dns
+        del self._dnsNames[slstIdx]
+        self._dnsNames.add(dns.name)
+        self._dnsvw.changeDns(idx, dns)
+        self._db.updateDns(dnsName, dns)

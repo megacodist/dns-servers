@@ -64,3 +64,13 @@ class IDatabase(ABC):
     def insertDns(self, dns: DnsServer) -> None:
         """Inserts the specified DNS server object into the database."""
         pass
+
+    @abstractmethod
+    def deleteDns(self, dns_name: str) -> None:
+        """Deletes the specified DNS server object from the database."""
+        pass
+
+    @abstractmethod
+    def updateDns(self, dns_name: str, new_dns: DnsServer) -> None:
+        """Updates the specified DNS server object with the new one."""
+        pass
