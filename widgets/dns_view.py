@@ -31,10 +31,14 @@ class Dnsview(tk.Frame):
         self._SECON_COL_IDX = 2
         self._cbDoubleClicked = double_clicked_cb
         """The callback to be called if an item is double clicked."""
-        self._idxIid: dict[int, str] = {}
-        """The mapping between index and iid of the items in the view."""
-        self._iidIdx: dict[str, int] = {}
-        """The mapping between iid and index of the items in the view."""
+        self._mpIdxIid: dict[int, str] = {}
+        """The mapping from index to iid of the items in the view:
+        `index -> iid`
+        """
+        self._mpIidIdx: dict[str, int] = {}
+        """The mapping from iid to index of the items in the view:
+        `iid -> index`
+        """
         self._initGui(
             name_col_width,
             primary_col_width,
@@ -120,8 +124,8 @@ class Dnsview(tk.Frame):
         """Clears all DNS servers from the View."""
         for child in self._trvw.get_children():
             self._trvw.delete(child)
-        self._iidIdx.clear()
-        self._idxIid.clear()
+        self._mpIidIdx.clear()
+        self._mpIdxIid.clear()
     
     def getColsWidth(self) -> tuple[int, int, int]:
         """Returns the width of `Name`, `Primary`, and `Secondary` columns
@@ -142,7 +146,7 @@ class Dnsview(tk.Frame):
             case 0:
                 return None
             case 1:
-                return self._iidIdx[selection[0]]
+                return self._mpIidIdx[selection[0]]
             case _:
                 logging.error(
                     'more than one item in the Dnsview is selected',
@@ -155,24 +159,24 @@ class Dnsview(tk.Frame):
                 parent='',
                 index=tk.END,
                 values=self._dnsToValues(dns))
-            self._iidIdx[iid] = idx
-            self._idxIid[idx] = iid
+            self._mpIidIdx[iid] = idx
+            self._mpIdxIid[idx] = iid
     
     def appendDns(self, dns: DnsServer) -> None:
-        idx = len(self._idxIid)
+        idx = len(self._mpIdxIid)
         iid = self._trvw.insert(
             parent='',
             index=tk.END,
             values=self._dnsToValues(dns))
-        self._idxIid[idx] = iid
-        self._iidIdx[iid] = idx
+        self._mpIdxIid[idx] = iid
+        self._mpIidIdx[iid] = idx
     
     def deleteIdx(self, idx: int) -> None:
-        iid = self._idxIid[idx]
+        iid = self._mpIdxIid[idx]
         self._trvw.delete(iid)
-        del self._idxIid[idx]
-        del self._iidIdx[iid]
+        del self._mpIdxIid[idx]
+        del self._mpIidIdx[iid]
     
     def changeDns(self, idx: int, dns: DnsServer) -> None:
-        iid = self._idxIid[idx]
+        iid = self._mpIdxIid[idx]
         self._trvw.item(iid, values=self._dnsToValues(dns))

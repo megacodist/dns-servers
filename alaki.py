@@ -15,6 +15,11 @@ def main() -> None:
     res = subprocess.Popen(command, encoding='utf-8')
     print(res.stdout)
 
+def main2():
+    import subprocess
+    output = subprocess.check_output(["systemd-resolve", "query", "-t", "nameserver"]).decode("utf-8")
+    print(output)
+
 
 if __name__ == '__main__':
-    main()
+    main2()

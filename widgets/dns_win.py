@@ -296,6 +296,7 @@ class DnsWin(tk.Tk):
     
     def _onInterfaceChanged(self, idx: int) -> None:
         from ntwrk import GetDnsServers
+        self._lfrm_interDnses.config(text=self._interfaces[idx])
         print(GetDnsServers(self._interfaces[idx]))
     
     def _loadInterfaces(self) -> None:
@@ -318,9 +319,6 @@ class DnsWin(tk.Tk):
                 str(err),
                 title=err.__class__.__qualname__,
                 type_=MessageType.ERROR)
-    
-    def _changeInterface(self, idx: int) -> None:
-        pass
     
     def _loadDnses(self) -> None:
         from utils.funcs import listDnses
@@ -359,17 +357,27 @@ class DnsWin(tk.Tk):
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
+        from utils.funcs import dnsToSetIps
         dnsDialog = DnsDialog(self, self._dnsNames)
         dns = dnsDialog.showDialog()
-        if dns:
-            # Checking existence of IPs...
-            if self._ipsExist(dns):
-                return
-            # Adding DNS server...
-            self._dnses.append(dns)
-            self._dnsNames.add(dns.name)
-            self._db.insertDns(dns)
-            self._dnsvw.appendDns(dns)
+        if dns is None:
+            return
+        # Checking existence of IPs...
+        ips = dnsToSetIps(dns)
+        try:
+            ipsIdx = self._ips.index(ips)
+        except ValueError:
+            pass
+        else:
+            self._msgvw.AddMessage(
+                _('IPS_EXIST').format(self._dnses[ipsIdx].name),
+                type_=MessageType.ERROR)
+            return
+        # Adding DNS server...
+        self._dnses.append(dns)
+        self._dnsNames.add(dns.name)
+        self._db.insertDns(dns)
+        self._dnsvw.appendDns(dns)
     
     def _deleteDns(self) -> None:
         from tkinter.messagebox import askyesno
@@ -413,10 +421,21 @@ class DnsWin(tk.Tk):
         dns = dnsDialog.showDialog()
         if dns is None:
             return
-        if self._ipsExist(dns):
-            return
+        # Checking existence of IPs...
+        ips = dnsToSetIps(dns)
+        try:
+            ipsIdx = self._ips.index(ips)
+        except ValueError:
+            pass
+        else:
+            if idx != ipsIdx:
+                self._msgvw.AddMessage(
+                    _('IPS_EXIST').format(self._dnses[ipsIdx].name),
+                    type_=MessageType.ERROR)
+                return
+        # Applying change...
         self._dnses[idx] = dns
-        self._ips[idx] = dnsToSetIps(dns)
+        self._ips[idx] = ips
         del self._dnsNames[slstIdx]
         self._dnsNames.add(dns.name)
         self._dnsvw.changeDns(idx, dns)

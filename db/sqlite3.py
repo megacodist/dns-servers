@@ -65,12 +65,7 @@ class SqliteDb(IDatabase):
                 (?, ?, ?)
         """
         cur = self._conn.cursor()
-        cur = cur.execute(
-            sql,
-            (
-                dns.name,
-                int(dns.primary),
-                int(dns.secondary) if dns.secondary else None))
+        cur = cur.execute(sql, self._dnsToTuple(dns))
         self._conn.commit()
     
     def deleteDns(self, dns_name: str) -> None:
@@ -94,7 +89,14 @@ class SqliteDb(IDatabase):
                 name = ?
         """
         cur = self._conn.cursor()
-        cur = cur.execute(
-            sql,
-            (new_dns.name, new_dns.primary, new_dns.secondary, dns_name))
+        cur = cur.execute(sql, (*self._dnsToTuple(new_dns), dns_name,))
         self._conn.commit()
+
+    def _dnsToTuple(self, dns: DnsServer) -> tuple[str, int, int | None]:
+        """Converts the `DnsServer` object into a 3-tuple compatible with
+        the database.
+        """
+        return (
+            dns.name,
+            int(dns.primary),
+            int(dns.secondary) if dns.secondary else None)

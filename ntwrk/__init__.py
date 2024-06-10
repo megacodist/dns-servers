@@ -67,4 +67,6 @@ def GetDnsServers(name: str) -> str:
             returncode=process.returncode,
             cmd=command,
             output=error)
+    lines = output.splitlines()
+    lines = [line.split() for line in lines if line.split()]
     return output
