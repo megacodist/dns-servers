@@ -3,6 +3,7 @@
 #
 
 
+from ipaddress import IPv4Address
 from queue import Queue
 from typing import Callable, MutableSequence, TYPE_CHECKING
 
@@ -28,3 +29,10 @@ def listDnses(
     if q:
         q.put(_('LOADING_DNSES'))
     return db.selctAllDnses()
+
+def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
+    """Converts a `DnsServer` object into a set of one or two IPv4
+    objects.
+    """
+    return {dns.primary} if dns.secondary is None else \
+        {dns.primary, dns.secondary}

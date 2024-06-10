@@ -70,3 +70,6 @@ msgstr "Enter a DNS server"
 
 msgid "SELECT_ITEM_DNS_VIEW"
 msgstr "Select an item in the DNS servers."
+
+msgid "IPS_EXIST"
+msgstr "These IPv4 exist in '{}' DNS server."

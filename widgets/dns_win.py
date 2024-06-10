@@ -3,8 +3,8 @@
 #
 
 from concurrent.futures import CancelledError, Future
+from ipaddress import IPv4Address
 import logging
-from os import execv
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
@@ -54,6 +54,7 @@ class DnsWin(tk.Tk):
         self._interfaces: MutableSequence[str]
         """A `MutableSequence` of all network interfaces."""
         self._dnses: MutableSequence[DnsServer]
+        self._ips: MutableSequence[set[IPv4Address]]
         self._dnsNames = SortedList[str]()
         # Images...
         self._GIF_WAIT: GifImage
@@ -294,7 +295,8 @@ class DnsWin(tk.Tk):
         self._loadDnses()
     
     def _onInterfaceChanged(self, idx: int) -> None:
-        pass
+        from ntwrk import GetDnsServers
+        print(GetDnsServers(self._interfaces[idx]))
     
     def _loadInterfaces(self) -> None:
         from utils.funcs import listInterfaces
@@ -328,20 +330,42 @@ class DnsWin(tk.Tk):
             finish_cb=self._onDnsesLoaded)
 
     def _onDnsesLoaded(self, fut: Future[MutableSequence[DnsServer]]) -> None:
+        from utils.funcs import dnsToSetIps
         try:
             self._dnses = fut.result()
             self._dnsNames.items = [dns.name for dns in self._dnses]
+            self._ips = [dnsToSetIps(dns) for dns in self._dnses]
             self._dnsvw.populate(self._dnses)
         except CancelledError:
             self._msgvw.AddMessage(
                 _('LOADING_DNSES_CANCELED'),
                 type_=MessageType.INFO)
+    
+    def _ipsExist(self, dns: DnsServer) -> bool:
+        """Checks if IPv4 objects of the DNS server exist, if so informs
+        the user and returns `True` otherwise returns `False`.
+        """
+        from utils.funcs import dnsToSetIps
+        ips = dnsToSetIps(dns)
+        try:
+            ipsIdx = self._ips.index(ips)
+        except ValueError:
+            return False
+        else:
+            self._msgvw.AddMessage(
+                _('IPS_EXIST').format(self._dnses[ipsIdx].name),
+                type_=MessageType.ERROR)
+            return True
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
         dnsDialog = DnsDialog(self, self._dnsNames)
         dns = dnsDialog.showDialog()
         if dns:
+            # Checking existence of IPs...
+            if self._ipsExist(dns):
+                return
+            # Adding DNS server...
             self._dnses.append(dns)
             self._dnsNames.add(dns.name)
             self._db.insertDns(dns)
@@ -366,6 +390,7 @@ class DnsWin(tk.Tk):
     
     def _editDns(self) -> None:
         from .dns_dialog import DnsDialog
+        from utils.funcs import dnsToSetIps
         idx = self._dnsvw.getSetectedIdx()
         if idx is None:
             self._msgvw.AddMessage(
@@ -375,6 +400,7 @@ class DnsWin(tk.Tk):
         dnsName = self._dnses[idx].name
         slstIdx = self._dnsNames.index(dnsName)[1]
         if isinstance(slstIdx, slice):
+            # Error: two or more DNS servers with the same name...
             logging.error('E-1', dnsName, stack_info=True)
             msg = _('DEL_DNS').format(dnsName)
             words = msg.split()
@@ -387,7 +413,10 @@ class DnsWin(tk.Tk):
         dns = dnsDialog.showDialog()
         if dns is None:
             return
+        if self._ipsExist(dns):
+            return
         self._dnses[idx] = dns
+        self._ips[idx] = dnsToSetIps(dns)
         del self._dnsNames[slstIdx]
         self._dnsNames.add(dns.name)
         self._dnsvw.changeDns(idx, dns)
