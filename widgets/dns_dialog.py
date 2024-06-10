@@ -32,12 +32,19 @@ class DnsDialog(tk.Toplevel):
         self.resizable(False, False)
         self.grab_set()
         # Defning variables...
+        self._dnsNames: SortedList[str] = dns_names
         self._validColor = 'green'
         self._invalidColor = '#ca482e'
         self._result: DnsServer | None = None
         """The gathered DNS server information. If dialog is canceled, it
         will be `None`."""
-        self._dnsNames: SortedList[str] = dns_names
+        self._resName: str
+        self._resPrim: IPv4Address | None
+        self._resSecon: IPv4Address | None
+        self._errName: str = ''
+        self._errPrim: str = ''
+        self._errSecon: str = ''
+        # Initializing StringVars...
         if dns is None:
             self._svarName = tk.StringVar(self, '')
             self._svarPrim = tk.StringVar(self, '')
@@ -137,9 +144,38 @@ class DnsDialog(tk.Toplevel):
             pady=2,
             sticky=tk.NSEW)
         #
+        self._lfrm_errors = ttk.LabelFrame(
+            self._frm_container,
+            text=_('ERRORS'))
+        self._lfrm_errors.rowconfigure(0, weight=1)
+        self._lfrm_errors.grid(
+            row=3,
+            column=0,
+            columnspan=2,
+            padx=2,
+            pady=2,
+            sticky=tk.NSEW)
+        #
+        self._hscrlbr = ttk.Scrollbar(
+            self._lfrm_errors,
+            orient=tk.HORIZONTAL)
+        self._txt = tk.Text(
+            self._lfrm_errors,
+            state=tk.DISABLED,
+            xscrollcommand=self._hscrlbr.set,)  
+        self._hscrlbr.config(command=self._txt.xview)
+        self._txt.grid(
+            column=0,
+            row=0,
+            sticky=tk.NSEW)
+        self._hscrlbr.grid(
+            column=0,
+            row=1,
+            sticky=tk.EW)
+        #
         self._frm_btns = ttk.Frame(self._frm_container)
         self._frm_btns.grid(
-            row=3,
+            row=4,
             column=0,
             columnspan=2,
             padx=2,
@@ -148,7 +184,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._btn_ok = ttk.Button(
             self._frm_btns,
-            text="OK",
+            text=_('OK'),
             width=10,
             command=self._onApproved,
             default=tk.ACTIVE)
@@ -156,7 +192,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._btn_cancel = ttk.Button(
             self._frm_btns,
-            text="Cancel",
+            text=_('CANCEL'),
             width=10,
             command=self._onCanceled)
         self._btn_cancel.pack(side=tk.RIGHT, padx=5, pady=5)
@@ -171,16 +207,24 @@ class DnsDialog(tk.Toplevel):
     
     def _validateName(self, text: str) -> bool:
         text = text.strip()
-        if text and (not text in self._dnsNames):
-            self._fields['name'].data = text
-            self._fields['name'].status = True
-            self._lbl_name.config(foreground=self._validColor)
-            if self._isInputValid():
-                self._btn_ok.config(state=tk.NORMAL)
-        else:
+        if not text:
+            # Reporting empty name error...
+            self._errName = _('EMPTY_DNS_NAME')
             self._lbl_name.config(foreground=self._invalidColor)
-            self._fields['name'].status = False
             self._btn_ok.config(state=tk.DISABLED)
+            self._updateErrorMsg()
+        elif text in self._dnsNames:
+            # Reporting duplicate name error...
+            self._errName = _('DUPLICATE_DNS_NAME')
+            self._lbl_name.config(foreground=self._invalidColor)
+            self._btn_ok.config(state=tk.DISABLED)
+            self._updateErrorMsg()
+        else:
+            # Reporting name's OK...
+            self._errName = ''
+            self._lbl_name.config(foreground=self._validColor)
+            if not self._errorFound():
+                self._btn_ok.config(state=tk.NORMAL)
         return True
     
     def _validatePrimary(self, text: str) -> bool:
@@ -212,6 +256,25 @@ class DnsDialog(tk.Toplevel):
             self._fields['secondary'].status = False
             self._btn_ok.config(state=tk.DISABLED)
         return True
+    
+    def _ipsEqual(self) -> bool:
+        """Specifies whther the primary and secondary IPs are equal or not."""
+        if self._resPrim and self._resSecon:
+            return self._resPrim == self._resSecon
+        else:
+            return False
+    
+    def _errorFound(self) -> bool:
+        """Specifies whether an error has found or not."""
+        return any((self._errName, self._errPrim, self._errSecon,))
+    
+    def _updateErrorMsg(self) -> None:
+        msg = '\n'.join(
+            filter(None, (self._errName, self._errPrim, self._errSecon)))
+        self._txt.config(state=tk.NORMAL)
+        self._txt.delete("1.0", tk.END)
+        self._txt.insert(tk.END, msg)
+        self._txt.config(state=tk.DISABLED)
     
     def showDialog(self) -> DnsServer | None:
         """Shows the dialog box and returns a `DnsServer` on completion

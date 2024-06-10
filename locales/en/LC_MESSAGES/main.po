@@ -29,6 +29,15 @@ msgstr "Primary"
 msgid "SECONDARY"
 msgstr "Secondary"
 
+msgid "OK"
+msgstr "OK"
+
+msgid "CANCEL"
+msgstr "Cancel"
+
+msgid "ERRORS"
+msgstr "Errors"
+
 msgid "DNS_SERVERS"
 msgstr "DNS servers"
 
@@ -73,3 +82,9 @@ msgstr "Select an item in the DNS servers."
 
 msgid "IPS_EXIST"
 msgstr "These IPv4 exist in '{}' DNS server."
+
+msgid "EMPTY_DNS_NAME"
+msgstr "DNS name cannot be empty."
+
+msgid "DUPLICATE_DNS_NAME"
+msgstr "'{}' already exists."
