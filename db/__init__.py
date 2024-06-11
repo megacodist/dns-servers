@@ -93,7 +93,7 @@ class IDatabase(ABC):
         pass
 
     @abstractmethod
-    def selctAllDnses(self) -> MutableSequence[DnsServer]:
+    def selctAllDnses(self) -> dict[int, DnsServer]:
         """Returns a mutable sequence (typically a `list`) of all DNS
         servers in the database.
         """
@@ -105,8 +105,10 @@ class IDatabase(ABC):
         pass
 
     @abstractmethod
-    def deleteDns(self, dns_name: str) -> None:
-        """Deletes the specified DNS server object from the database."""
+    def deleteDns(self, dns_spec: int | str) -> None:
+        """Deletes the specified DNS server object from the database.
+        The specifier can be either `int` (`id`) or `str` (`name`).
+        """
         pass
 
     @abstractmethod
