@@ -8,6 +8,21 @@ from ipaddress import IPv4Address
 from typing import MutableSequence
 
 
+class DnsInfo:
+    """This class is used when DNS servers information is not possible
+    via `DnsServer`.
+    """
+    def __init__(
+            self,
+            name: str,
+            primary: str,
+            secondary: str,
+            ) -> None:
+        self.name = name
+        self.primary = primary
+        self.secondary = secondary
+
+
 class DnsServer:
     def __init__(
             self,
@@ -34,11 +49,35 @@ class DnsServer:
         """Gets the secondary IP of the DNS server."""
         return self._secondary
     
+    def ipsToSet(self) -> set[IPv4Address]:
+        """Returns IPs as a set. If the secondary IP is `None`, the result
+        only contains primary IP.
+        """
+        set_ = set[IPv4Address]()
+        set_.add(self._primary)
+        if self._secondary:
+            set_.add(self._primary)
+        return set_
+    
+    def ipsEqual(self, dns: DnsServer) -> bool:
+        """Specifies whether IP set of this object equals the provided
+        object.
+        """
+        if not isinstance(dns, DnsServer):
+            return NotImplemented
+        return self.ipsToSet() == dns.ipsToSet()
+    
     def __repr__(self) -> str:
         second = f', secondary={str(self._secondary)}' if self._secondary \
             else ''
         return (f'<{self.__class__.__qualname__} name={self._name}, '
             f'primary={self._primary}{second}>')
+    
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, DnsServer):
+            return NotImplemented
+        return (self._name == value._name) and (self.ipsToSet() == 
+            value.ipsToSet())
 
 
 class IDatabase(ABC):

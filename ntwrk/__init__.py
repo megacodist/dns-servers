@@ -4,8 +4,14 @@
 
 
 from collections import namedtuple
-from ipaddress import IPv4Address
 from typing import MutableSequence
+
+from db import DnsInfo, DnsServer
+
+
+class NetOpFailedError(Exception):
+    """Exception raised for errors in APIS of this module."""
+    pass
 
 
 def GetInterfacesAttrs() -> tuple[tuple[str, ...], ...]:
@@ -46,27 +52,35 @@ def GetInterfacesAttrs() -> tuple[tuple[str, ...], ...]:
 
 
 def GetInterfacesNames() -> MutableSequence[str]:
-    """Gets all the available interfaces names. It raises `TypeError`
+    """Gets all the available interfaces names. It raises `NetOpFailedError`
     upon any failure.
     """
     try:
         return [inter.Name for inter in GetInterfacesAttrs()] # type: ignore
     except AttributeError:
-        raise TypeError('Unable to read network interfaces names.')
+        raise NetOpFailedError('Unable to read network interface names.')
 
 
-def GetDnsServers(name: str) -> str:
+def GetDnsServers(name: str) -> DnsInfo | DnsServer:
+    """Gets DNS servers for the specified network interface.
+
+    #### Exceptions:
+    1. `subprocess.CalledProcessError`
+    """
     import subprocess
     command = ['netsh', 'interface', 'ip', 'show', 'dns', name]
     process = subprocess.Popen(
         command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,)
     output, error = process.communicate()
     if error:
         raise subprocess.CalledProcessError(
             returncode=process.returncode,
             cmd=command,
-            output=error)
+            output=error,
+            stderr=error,)
     lines = output.splitlines()
     lines = [line.split() for line in lines if line.split()]
     return output

@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 def main() -> None:
     global _RES_DIR
     global _settings
+    from utils.logger import configureLogger
+    # Configuring logger...
+    print(_('CONFIG_LOGGER'))
+    configureLogger(_APP_DIR / 'log.log')
     # Loading application settings...
     print(_('LOADING_SETTINGS'))
     try:

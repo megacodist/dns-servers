@@ -14,11 +14,6 @@ if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
 
 
-class _DataStatus:
-    def __init__(self, data: str | IPv4Address | None, status: bool) -> None:
-        self.data = data
-        self.status = status
-
 
 class DnsDialog(tk.Toplevel):
     def __init__(
@@ -38,9 +33,9 @@ class DnsDialog(tk.Toplevel):
         self._result: DnsServer | None = None
         """The gathered DNS server information. If dialog is canceled, it
         will be `None`."""
-        self._resName: str
-        self._resPrim: IPv4Address | None
-        self._resSecon: IPv4Address | None
+        self._resName: str = ''
+        self._resPrim: IPv4Address | None = None
+        self._resSecon: IPv4Address | None = None
         self._errName: str = ''
         self._errPrim: str = ''
         self._errSecon: str = ''
@@ -59,10 +54,6 @@ class DnsDialog(tk.Toplevel):
             raise TypeError("'dns' argument of the initializer of "
                 f"{self.__class__.__qualname__} must be either None "
                 f"or {DnsServer.__qualname__}")
-        self._fields = {
-            'name': _DataStatus(None, False),
-            'primary': _DataStatus(None, False),
-            'secondary': _DataStatus(None, False),}
         # Initializing the GUI...
         self._initGui()
         self._validateInitials()
@@ -81,9 +72,9 @@ class DnsDialog(tk.Toplevel):
     
     def _onApproved(self) -> None:
         self._result = DnsServer(
-            self._fields['name'].data, # type: ignore
-            self._fields['primary'].data,  # type: ignore
-            self._fields['secondary'].data)  # type: ignore
+            self._resName,
+            self._resPrim,  # type: ignore
+            self._resSecon)
         self.destroy()
 
     def _onCanceled(self) -> None:
@@ -161,6 +152,9 @@ class DnsDialog(tk.Toplevel):
             orient=tk.HORIZONTAL)
         self._txt = tk.Text(
             self._lfrm_errors,
+            height=4,
+            width=24,
+            wrap=tk.NONE,
             state=tk.DISABLED,
             xscrollcommand=self._hscrlbr.set,)  
         self._hscrlbr.config(command=self._txt.xview)
@@ -197,9 +191,6 @@ class DnsDialog(tk.Toplevel):
             command=self._onCanceled)
         self._btn_cancel.pack(side=tk.RIGHT, padx=5, pady=5)
     
-    def _isInputValid(self) -> bool:
-        return all(self._fields[key].status for key in self._fields)
-    
     def _validateInitials(self) -> None:
         self._validateName(self._svarName.get())
         self._validatePrimary(self._svarPrim.get())
@@ -212,52 +203,72 @@ class DnsDialog(tk.Toplevel):
             self._errName = _('EMPTY_DNS_NAME')
             self._lbl_name.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
-            self._updateErrorMsg()
         elif text in self._dnsNames:
             # Reporting duplicate name error...
-            self._errName = _('DUPLICATE_DNS_NAME')
+            self._errName = _('DUPLICATE_DNS_NAME').format(text)
             self._lbl_name.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
-            self._updateErrorMsg()
         else:
             # Reporting name's OK...
             self._errName = ''
+            self._resName = text
             self._lbl_name.config(foreground=self._validColor)
             if not self._errorFound():
                 self._btn_ok.config(state=tk.NORMAL)
+        self._updateErrorMsg()
         return True
     
     def _validatePrimary(self, text: str) -> bool:
         text = text.strip()
         try:
-            ip = IPv4Address(text)
-            self._fields['primary'].data = ip
-            self._fields['primary'].status = True
-            self._lbl_primary.config(foreground=self._validColor)
-            if self._isInputValid():
-                self._btn_ok.config(state=tk.NORMAL)
+            self._resPrim = IPv4Address(text)
         except AddressValueError:
-            self._fields['primary'].status = False
+            self._resPrim = None
+        if self._resPrim is None:
+            # Reporting invalid primary IP error...
+            self._errPrim = _('INVALID_PRIM_IP')
             self._lbl_primary.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
+        elif self._primEqualsSecon():
+            # Reporting identical IPs error...
+            self._errPrim = _('EQUAL_PRIM_SECON')
+            self._lbl_primary.config(foreground=self._invalidColor)
+            self._btn_ok.config(state=tk.DISABLED)
+        else:
+            # Reporting primary IP is OK...
+            self._errPrim = ''
+            self._lbl_primary.config(foreground=self._validColor)
+            if not self._errorFound():
+                self._btn_ok.config(state=tk.NORMAL)
+        self._updateErrorMsg()
         return True
     
     def _validateSecond(self, text: str) -> bool:
         text = text.strip()
         try:
-            if text == '' or (ip := IPv4Address(text)):
-                self._fields['secondary'].data = ip if text else None # type: ignore
-                self._fields['secondary'].status = True
-                self._lbl_secondary.config(foreground=self._validColor)
-                if self._isInputValid():
-                    self._btn_ok.config(state=tk.NORMAL)
+            self._resSecon = IPv4Address(text)
         except AddressValueError:
+            self._resSecon = None
+        if text and (self._resSecon is None):
+            # Reporting invalid secondary IP error...
+            self._errSecon = _('INVALID_SECON_IP')
             self._lbl_secondary.config(foreground=self._invalidColor)
-            self._fields['secondary'].status = False
             self._btn_ok.config(state=tk.DISABLED)
+        elif self._primEqualsSecon():
+            # Reporting identical IPs error...
+            self._errSecon = _('EQUAL_PRIM_SECON')
+            self._lbl_secondary.config(foreground=self._invalidColor)
+            self._btn_ok.config(state=tk.DISABLED)
+        else:
+            # Reporting secondary IP is OK...
+            self._errSecon = ''
+            self._lbl_secondary.config(foreground=self._validColor)
+            if not self._errorFound():
+                self._btn_ok.config(state=tk.NORMAL)
+        self._updateErrorMsg()
         return True
     
-    def _ipsEqual(self) -> bool:
+    def _primEqualsSecon(self) -> bool:
         """Specifies whther the primary and secondary IPs are equal or not."""
         if self._resPrim and self._resSecon:
             return self._resPrim == self._resSecon

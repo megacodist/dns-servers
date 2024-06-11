@@ -50,6 +50,9 @@ msgstr "Are you sure to delete '{}' DNS server?"
 msgid "LOADING_SETTINGS"
 msgstr "Loading settings..."
 
+msgid "CONFIG_LOGGER"
+msgstr "Configuring logger..."
+
 msgid "DEL_DNS"
 msgstr "Deleting DNS server named '{}'"
 
@@ -88,3 +91,12 @@ msgstr "DNS name cannot be empty."
 
 msgid "DUPLICATE_DNS_NAME"
 msgstr "'{}' already exists."
+
+msgid "INVALID_PRIM_IP"
+msgstr "The primary IP is invalid."
+
+msgid "INVALID_SECON_IP"
+msgstr "The secondary IP is invalid."
+
+msgid "EQUAL_PRIM_SECON"
+msgstr "The primary and secondary IPs are equal."

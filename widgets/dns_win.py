@@ -54,7 +54,6 @@ class DnsWin(tk.Tk):
         self._interfaces: MutableSequence[str]
         """A `MutableSequence` of all network interfaces."""
         self._dnses: MutableSequence[DnsServer]
-        self._ips: MutableSequence[set[IPv4Address]]
         self._dnsNames = SortedList[str]()
         # Images...
         self._GIF_WAIT: GifImage
@@ -307,6 +306,7 @@ class DnsWin(tk.Tk):
             widgets=(self._intervw,))
     
     def _onInterfacesLoaded(self, fut: Future[MutableSequence[str]]) -> None:
+        from ntwrk import NetOpFailedError
         try:
             self._interfaces = fut.result()
             self._intervw.populate(self._interfaces)
@@ -314,7 +314,7 @@ class DnsWin(tk.Tk):
             self._msgvw.AddMessage(
                 _('LOADING_INTERFACES_CANCELED'),
                 type_=MessageType.INFO)
-        except TypeError as err:
+        except NetOpFailedError as err:
             self._msgvw.AddMessage(
                 str(err),
                 title=err.__class__.__qualname__,
@@ -332,28 +332,21 @@ class DnsWin(tk.Tk):
         try:
             self._dnses = fut.result()
             self._dnsNames.items = [dns.name for dns in self._dnses]
-            self._ips = [dnsToSetIps(dns) for dns in self._dnses]
             self._dnsvw.populate(self._dnses)
         except CancelledError:
             self._msgvw.AddMessage(
                 _('LOADING_DNSES_CANCELED'),
                 type_=MessageType.INFO)
     
-    def _ipsExist(self, dns: DnsServer) -> bool:
+    def _ipsExist(self, dns: DnsServer) -> int | None:
         """Checks if IPv4 objects of the DNS server exist, if so informs
-        the user and returns `True` otherwise returns `False`.
+        the user and returns its index otherwise returns `None`.
         """
-        from utils.funcs import dnsToSetIps
-        ips = dnsToSetIps(dns)
-        try:
-            ipsIdx = self._ips.index(ips)
-        except ValueError:
-            return False
-        else:
-            self._msgvw.AddMessage(
-                _('IPS_EXIST').format(self._dnses[ipsIdx].name),
-                type_=MessageType.ERROR)
-            return True
+        ipsSet = dns.ipsToSet()
+        for idx, item in enumerate(self._dnses):
+            if ipsSet == item.ipsToSet():
+                return idx
+        return None
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
@@ -363,12 +356,8 @@ class DnsWin(tk.Tk):
         if dns is None:
             return
         # Checking existence of IPs...
-        ips = dnsToSetIps(dns)
-        try:
-            ipsIdx = self._ips.index(ips)
-        except ValueError:
-            pass
-        else:
+        ipsIdx = self._ipsExist(dns)
+        if isinstance(ipsIdx, int):
             self._msgvw.AddMessage(
                 _('IPS_EXIST').format(self._dnses[ipsIdx].name),
                 type_=MessageType.ERROR)
@@ -406,8 +395,8 @@ class DnsWin(tk.Tk):
                 type_=MessageType.WARNING)
             return
         dnsName = self._dnses[idx].name
-        slstIdx = self._dnsNames.index(dnsName)[1]
-        if isinstance(slstIdx, slice):
+        slsIdx = self._dnsNames.index(dnsName)[1]
+        if isinstance(slsIdx, slice):
             # Error: two or more DNS servers with the same name...
             logging.error('E-1', dnsName, stack_info=True)
             msg = _('DEL_DNS').format(dnsName)
@@ -417,26 +406,25 @@ class DnsWin(tk.Tk):
             msg = _('ERROR').format(msg)
             self._msgvw.AddMessage(msg, 'E-1', MessageType.ERROR)
             return
+        del self._dnsNames[slsIdx]
         dnsDialog = DnsDialog(self, self._dnsNames, self._dnses[idx])
         dns = dnsDialog.showDialog()
-        if dns is None:
+        logging.debug(dns)
+        if (dns is None) or (dns == self._dnses[idx]):
+            # No change, doing nothing...
+            self._dnsNames.add(dnsName)
             return
         # Checking existence of IPs...
-        ips = dnsToSetIps(dns)
-        try:
-            ipsIdx = self._ips.index(ips)
-        except ValueError:
-            pass
-        else:
-            if idx != ipsIdx:
-                self._msgvw.AddMessage(
-                    _('IPS_EXIST').format(self._dnses[ipsIdx].name),
-                    type_=MessageType.ERROR)
-                return
+        ipsIdx = self._ipsExist(dns)
+        if isinstance(ipsIdx, int):
+            self._dnsNames.add(dnsName)
+            self._msgvw.AddMessage(
+                _('IPS_EXIST').format(self._dnses[ipsIdx].name),
+                type_=MessageType.ERROR)
+            return
         # Applying change...
         self._dnses[idx] = dns
-        self._ips[idx] = ips
-        del self._dnsNames[slstIdx]
+        del self._dnsNames[slsIdx]
         self._dnsNames.add(dns.name)
         self._dnsvw.changeDns(idx, dns)
         self._db.updateDns(dnsName, dns)
