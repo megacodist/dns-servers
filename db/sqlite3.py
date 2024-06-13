@@ -17,6 +17,22 @@ class SqliteDb(IDatabase):
         self._conn = sqlite3.connect(db_file, check_same_thread=False)
         """The connection object of the database."""
     
+    def _tupleToDns(self, tpl: tuple[str, int, int | None]) -> DnsServer:
+        """Converts a 3-tuple into a `DnsServer` object."""
+        return  DnsServer(
+            tpl[0],
+            IPv4Address(tpl[1]),
+            None if tpl[2] is None else IPv4Address(tpl[2]))
+
+    def _dnsToTuple(self, dns: DnsServer) -> tuple[str, int, int | None]:
+        """Converts the `DnsServer` object into a 3-tuple compatible with
+        the database.
+        """
+        return (
+            dns.name,
+            int(dns.primary),
+            int(dns.secondary) if dns.secondary else None)
+    
     def close(self) -> None:
         """Closes the database."""
         self._conn.close()
@@ -35,23 +51,20 @@ class SqliteDb(IDatabase):
         res = cur.fetchone()
         if res is None:
             return None
-        return DnsServer(
-            res[0],
-            res[1],
-            res[2],)
+        return self._tupleToDns(res)
     
-    def selctAllDnses(self) -> dict[int, DnsServer]:
+    def selctAllDnses(self) -> list[DnsServer]:
         sql = """
             SELECT
-                id, name, primary_, secondary
+                name, primary_, secondary
             FROM
                 dns_servers;
         """
         cur = self._conn.cursor()
         cur = cur.execute(sql)
-        dnses = {
-            tplDns[0]: self._tupleToDns(tplDns[1:])
-            for tplDns in cur.fetchall()}
+        dnses = [
+            self._tupleToDns(tplDns[1:])
+            for tplDns in cur.fetchall()]
         return dnses
     
     def insertDns(self, dns: DnsServer) -> None:
@@ -95,19 +108,3 @@ class SqliteDb(IDatabase):
         cur = self._conn.cursor()
         cur = cur.execute(sql, (*self._dnsToTuple(new_dns), dns_name,))
         self._conn.commit()
-    
-    def _tupleToDns(self, tpl: tuple[str, int, int | None]) -> DnsServer:
-        """Converts a 3-tuple into a `DnsServer` object."""
-        return  DnsServer(
-            tpl[0],
-            IPv4Address(tpl[1]),
-            None if tpl[2] is None else IPv4Address(tpl[2]))
-
-    def _dnsToTuple(self, dns: DnsServer) -> tuple[str, int, int | None]:
-        """Converts the `DnsServer` object into a 3-tuple compatible with
-        the database.
-        """
-        return (
-            dns.name,
-            int(dns.primary),
-            int(dns.secondary) if dns.secondary else None)

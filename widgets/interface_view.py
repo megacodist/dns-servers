@@ -6,6 +6,8 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable
 
+from ntwrk import AttrValue, InterfaceAttrs, canConnect
+
 
 class InterfaceView(tk.Frame):
     def __init__(
@@ -16,6 +18,8 @@ class InterfaceView(tk.Frame):
             ) -> None:
         super().__init__(master, **kwargs)
         self._cbSelection = selection_cb
+        self._canConn = 'green'
+        self._noConn = '#ca482e'
         self._initGui()
         # Bindings...
         self._lstbx.bind("<<ListboxSelect>>", self._onSelection)
@@ -53,11 +57,19 @@ class InterfaceView(tk.Frame):
         selection = self._lstbx.curselection()
         if self._cbSelection:
             self._cbSelection(selection[0])
+    
+    def _getItemColor(self, item: InterfaceAttrs) -> str:
+        from ntwrk import canConnect
+        if canConnect(item):
+            return self._canConn
+        else:
+            return self._noConn
 
-    def populate(self, items: Iterable[str]) -> None:
+    def populate(self, items: Iterable[InterfaceAttrs]) -> None:
         self.clear()
         for item in items:
-            self._lstbx.insert(tk.END, item)
+            self._lstbx.insert(tk.END, item['Name']) # type: ignore
+            self._lstbx.itemconfig(tk.END, fg=self._getItemColor(item))
     
     def clear(self) -> None:
         self._lstbx.delete(0, tk.END)

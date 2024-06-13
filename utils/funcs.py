@@ -8,27 +8,42 @@ from queue import Queue
 from typing import Callable, MutableSequence, TYPE_CHECKING
 
 from db import DnsServer, IDatabase
+from ntwrk import InterfaceAttrs
 
 
 if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
 
 
-def listInterfaces(q: Queue[str] | None) -> MutableSequence[str]:
+def mergeMsgs(braced: str, embed: str) -> str:
+    """Merges `embed` into `braced`. `braced` must contain `{}`."""
+    words = embed.split()
+    words[0] = words[0].lower()
+    embed = ' '.join(words)
+    return braced.format(embed)
+
+
+def listInterfaces(q: Queue[str] | None) -> list[InterfaceAttrs]:
     """List all network interfaces. Raises `TypeError` upon any failure."""
-    from ntwrk import GetInterfacesNames
+    from ntwrk import parse_ipconfig
     if q:
         q.put(_('LOADING_INTERFACES'))
-    return GetInterfacesNames()
+    return parse_ipconfig()
 
 
 def listDnses(
         q: Queue[str] | None,
         db: IDatabase,
-        ) -> MutableSequence[DnsServer]:
+        ) -> tuple[dict[str, DnsServer], dict[
+            frozenset[IPv4Address], DnsServer]]:
     if q:
-        q.put(_('LOADING_DNSES'))
-    return db.selctAllDnses()
+        q.put(_('READING_DB'))
+    dnses = db.selctAllDnses()
+    if q:
+        q.put(_('CONSTRUCTING_DATA'))
+    mpNameDns = {dns.name:dns for dns in dnses}
+    mpIpDns = {dns.ipsToSet():dns for dns in dnses}
+    return mpNameDns, mpIpDns
 
 def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
     """Converts a `DnsServer` object into a set of one or two IPv4

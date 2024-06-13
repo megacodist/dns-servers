@@ -57,7 +57,7 @@ msgid "DEL_DNS"
 msgstr "Deleting DNS server named '{}'"
 
 msgid "ERROR"
-msgstr "An error occurred while {}"
+msgstr "An error occurred while {}.\nIf error persists, contact Customer Service."
 
 msgid "INVALID_SETTINGS_FILE"
 msgstr "Invalid settings file, using defaults"
@@ -71,10 +71,13 @@ msgstr "Loading network interfaces was canceled."
 msgid "LOADING_INTERFACES"
 msgstr "Loading network interfaces"
 
-msgid "LOADING_DNSES"
-msgstr "Loading DNSes"
+msgid "READING_DB"
+msgstr "Reading the database"
 
-msgid "LOADING_DNSES_CANCELED"
+msgid "CONSTRUCTING_DATA"
+msgstr "Constructing data structures"
+
+msgid "READING_DNSES_CANCELED"
 msgstr "Loading DNS servers was canceled."
 
 msgid "ENTER_DNS"

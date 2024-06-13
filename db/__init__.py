@@ -49,15 +49,14 @@ class DnsServer:
         """Gets the secondary IP of the DNS server."""
         return self._secondary
     
-    def ipsToSet(self) -> set[IPv4Address]:
-        """Returns IPs as a set. If the secondary IP is `None`, the result
-        only contains primary IP.
+    def ipsToSet(self) -> frozenset[IPv4Address]:
+        """Returns IPs as a `frozenset` object. If the secondary IP is
+        `None`, the result only contains primary IP.
         """
-        set_ = set[IPv4Address]()
-        set_.add(self._primary)
         if self._secondary:
-            set_.add(self._primary)
-        return set_
+            return frozenset({self._primary, self._secondary,})
+        else:
+            return frozenset({self._primary,})
     
     def ipsEqual(self, dns: DnsServer) -> bool:
         """Specifies whether IP set of this object equals the provided
@@ -93,7 +92,7 @@ class IDatabase(ABC):
         pass
 
     @abstractmethod
-    def selctAllDnses(self) -> dict[int, DnsServer]:
+    def selctAllDnses(self) -> list[DnsServer]:
         """Returns a mutable sequence (typically a `list`) of all DNS
         servers in the database.
         """

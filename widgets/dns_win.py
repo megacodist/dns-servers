@@ -14,6 +14,7 @@ import PIL.Image
 import PIL.ImageTk
 
 from db import DnsServer, IDatabase
+from ntwrk import InterfaceAttrs
 
 from .dns_view import Dnsview
 from .interface_view import InterfaceView
@@ -51,10 +52,10 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         self._db = db
         """The database object."""
-        self._interfaces: MutableSequence[str]
+        self._interfaces: list[InterfaceAttrs]
         """A `MutableSequence` of all network interfaces."""
-        self._dnses: MutableSequence[DnsServer]
-        self._dnsNames = SortedList[str]()
+        self._mpNameDns: dict[str, DnsServer]
+        self._mpIpDns: dict[frozenset[IPv4Address], DnsServer]
         # Images...
         self._GIF_WAIT: GifImage
         self._HIMG_CLOSE: PIL.Image.Image
@@ -295,8 +296,8 @@ class DnsWin(tk.Tk):
     
     def _onInterfaceChanged(self, idx: int) -> None:
         from ntwrk import GetDnsServers
-        self._lfrm_interDnses.config(text=self._interfaces[idx])
-        print(GetDnsServers(self._interfaces[idx]))
+        self._lfrm_interDnses.config(text=self._interfaces[idx]['Name']) # type: ignore
+        print(GetDnsServers(self._interfaces[idx]['Name'])) # type: ignore
     
     def _loadInterfaces(self) -> None:
         from utils.funcs import listInterfaces
@@ -305,8 +306,10 @@ class DnsWin(tk.Tk):
             finish_cb=self._onInterfacesLoaded,
             widgets=(self._intervw,))
     
-    def _onInterfacesLoaded(self, fut: Future[MutableSequence[str]]) -> None:
-        from ntwrk import NetOpFailedError
+    def _onInterfacesLoaded(self, fut: Future[list[InterfaceAttrs]]) -> None:
+        from subprocess import CalledProcessError
+        from ntwrk import ParsingError
+        from utils.funcs import mergeMsgs
         try:
             self._interfaces = fut.result()
             self._intervw.populate(self._interfaces)
@@ -314,11 +317,12 @@ class DnsWin(tk.Tk):
             self._msgvw.AddMessage(
                 _('LOADING_INTERFACES_CANCELED'),
                 type_=MessageType.INFO)
-        except NetOpFailedError as err:
+        except (ParsingError, CalledProcessError,) as err:
+            msg = mergeMsgs(_('ERROR'), _('LOADING_INTERFACES'))
             self._msgvw.AddMessage(
-                str(err),
-                title=err.__class__.__qualname__,
+                msg,
                 type_=MessageType.ERROR)
+            logging.error('E2', err)
     
     def _loadDnses(self) -> None:
         from utils.funcs import listDnses
@@ -327,15 +331,18 @@ class DnsWin(tk.Tk):
             start_args=(self._db,),
             finish_cb=self._onDnsesLoaded)
 
-    def _onDnsesLoaded(self, fut: Future[MutableSequence[DnsServer]]) -> None:
+    def _onDnsesLoaded(
+            self,
+            fut: Future[tuple[dict[str, DnsServer], dict[
+                frozenset[IPv4Address], DnsServer]]],
+            ) -> None:
         from utils.funcs import dnsToSetIps
         try:
-            self._dnses = fut.result()
-            self._dnsNames.items = [dns.name for dns in self._dnses]
+            self._mpNameDns, self._mpIpDns = fut.result()
             self._dnsvw.populate(self._dnses)
         except CancelledError:
             self._msgvw.AddMessage(
-                _('LOADING_DNSES_CANCELED'),
+                _('READING_DNSES_CANCELED'),
                 type_=MessageType.INFO)
     
     def _ipsExist(self, dns: DnsServer) -> int | None:
@@ -387,7 +394,7 @@ class DnsWin(tk.Tk):
     
     def _editDns(self) -> None:
         from .dns_dialog import DnsDialog
-        from utils.funcs import dnsToSetIps
+        from utils.funcs import mergeMsgs
         idx = self._dnsvw.getSetectedIdx()
         if idx is None:
             self._msgvw.AddMessage(
@@ -399,11 +406,7 @@ class DnsWin(tk.Tk):
         if isinstance(slsIdx, slice):
             # Error: two or more DNS servers with the same name...
             logging.error('E-1', dnsName, stack_info=True)
-            msg = _('DEL_DNS').format(dnsName)
-            words = msg.split()
-            words[0] = words[0].lower()
-            msg = ' '.join(words)
-            msg = _('ERROR').format(msg)
+            msg = mergeMsgs(_('ERROR'), _('DEL_DNS').format(dnsName))
             self._msgvw.AddMessage(msg, 'E-1', MessageType.ERROR)
             return
         del self._dnsNames[slsIdx]
