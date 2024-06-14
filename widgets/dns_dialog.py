@@ -19,7 +19,7 @@ class DnsDialog(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            dns_names: SortedList[str],
+            mp_name_dns: dict[str, DnsServer],
             dns: DnsServer | None = None,
             ) -> None:
         super().__init__(master)
@@ -27,7 +27,8 @@ class DnsDialog(tk.Toplevel):
         self.resizable(False, False)
         self.grab_set()
         # Defning variables...
-        self._dnsNames: SortedList[str] = dns_names
+        self._mpNameDns: dict[str, DnsServer] = mp_name_dns
+        """The mappin from DNS names to DNS objects: `name -> dns`"""
         self._validColor = 'green'
         self._invalidColor = '#ca482e'
         self._result: DnsServer | None = None
@@ -203,7 +204,7 @@ class DnsDialog(tk.Toplevel):
             self._errName = _('EMPTY_DNS_NAME')
             self._lbl_name.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
-        elif text in self._dnsNames:
+        elif text in self._mpNameDns:
             # Reporting duplicate name error...
             self._errName = _('DUPLICATE_DNS_NAME').format(text)
             self._lbl_name.config(foreground=self._invalidColor)

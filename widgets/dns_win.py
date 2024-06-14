@@ -8,12 +8,12 @@ import logging
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, MutableSequence, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 import PIL.Image
 import PIL.ImageTk
 
-from db import DnsServer, IDatabase
+from db import DnsInfo, DnsServer, IDatabase
 from ntwrk import InterfaceAttrs
 
 from .dns_view import Dnsview
@@ -21,7 +21,6 @@ from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
 from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
-from utils.sorted_list import SortedList
 from utils.types import GifImage, TkImg
 
 
@@ -149,12 +148,12 @@ class DnsWin(tk.Tk):
         #
         self._intervw = InterfaceView(
             self._lfrm_interfaces,
-            self._onInterfaceChanged)
+            self._readDnsInfo)
         self._intervw.pack(fill=tk.BOTH, expand=1)
         #
-        self._lfrm_interDnses = ttk.Labelframe(self._frm_interDnses)
-        self._lfrm_interDnses.columnconfigure(0, weight=1)
-        self._lfrm_interDnses.grid(
+        self._lfrm_dnsInfo = ttk.Labelframe(self._frm_interDnses)
+        self._lfrm_dnsInfo.columnconfigure(0, weight=1)
+        self._lfrm_dnsInfo.grid(
             column=1,
             row=0,
             padx=3,
@@ -162,31 +161,40 @@ class DnsWin(tk.Tk):
             sticky=tk.NSEW,)
         #
         self._lbl_primary = ttk.Label(
-            self._lfrm_interDnses,
+            self._lfrm_dnsInfo,
             text=_('PRIMARY'))
         self._lbl_primary.grid(
             column=0,
             row=0,
             sticky=tk.W,)
         #
-        self._entry_primary = ttk.Entry(self._lfrm_interDnses)
+        self._entry_primary = ttk.Entry(self._lfrm_dnsInfo)
         self._entry_primary.grid(
             column=0,
             row=1,
             sticky=tk.NSEW,)
         #
         self._lbl_secondary = ttk.Label(
-            self._lfrm_interDnses,
+            self._lfrm_dnsInfo,
             text=_('SECONDARY'))
         self._lbl_secondary.grid(
             column=0,
             row=2,
             sticky=tk.W,)
         #
-        self._entry_secondary = ttk.Entry(self._lfrm_interDnses)
+        self._entry_secondary = ttk.Entry(self._lfrm_dnsInfo)
         self._entry_secondary.grid(
             column=0,
             row=3,
+            sticky=tk.NSEW,)
+        #
+        self._msg_dnsName = tk.Message(
+            self._lfrm_dnsInfo,
+            anchor=tk.W,
+            justify=tk.LEFT)
+        self._msg_dnsName.grid(
+            column=0,
+            row=4,
             sticky=tk.NSEW,)
         #
         self._lfrm_dnses = ttk.Labelframe(
@@ -264,6 +272,8 @@ class DnsWin(tk.Tk):
         self._settings.name_col_width = colsWidth[0]
         self._settings.primary_col_width = colsWidth[1]
         self._settings.secondary_col_width = colsWidth[2]
+        # Cleaning up...
+        self._asyncMngr.close()
         # Destroying the window...
         self.destroy()
     
@@ -294,10 +304,34 @@ class DnsWin(tk.Tk):
         self._loadInterfaces()
         self._loadDnses()
     
-    def _onInterfaceChanged(self, idx: int) -> None:
-        from ntwrk import GetDnsServers
-        self._lfrm_interDnses.config(text=self._interfaces[idx]['Name']) # type: ignore
-        print(GetDnsServers(self._interfaces[idx]['Name'])) # type: ignore
+    def _readDnsInfo(self, idx: int) -> None:
+        from utils.funcs import readDnsInfo
+        self._clearDnsInfoPanel()
+        interName = self._interfaces[idx]['Name']
+        self._lfrm_dnsInfo.config(text=interName) # type: ignore
+        self._asyncMngr.InitiateOp(
+            start_cb=readDnsInfo,
+            start_args=(interName, self._mpIpDns),
+            finish_cb=self._onDnsInfoRead,
+            widgets=(self._lfrm_dnsInfo,))
+    
+    def _onDnsInfoRead(self, fut: Future[DnsInfo | DnsServer]) -> None:
+        from subprocess import CalledProcessError
+        from ntwrk import ParsingError
+        from utils.funcs import mergeMsgs
+        try:
+            res = fut.result()
+            self._populateDnsInfoPanel(res)
+        except CancelledError:
+            self._msgvw.AddMessage(
+                _('X_CANCELED').format(_('READING_DNS_INFO')),
+                type_=MessageType.INFO,)
+        except (ParsingError, CalledProcessError,) as err:
+            msg = mergeMsgs(_('ERROR'), _('READING_DNS_INFO'))
+            self._msgvw.AddMessage(
+                msg,
+                type_=MessageType.ERROR)
+            logging.error('E2', err)
     
     def _loadInterfaces(self) -> None:
         from utils.funcs import listInterfaces
@@ -315,10 +349,10 @@ class DnsWin(tk.Tk):
             self._intervw.populate(self._interfaces)
         except CancelledError:
             self._msgvw.AddMessage(
-                _('LOADING_INTERFACES_CANCELED'),
+                _('X_CANCELED').format(_('READING_INTERFACES')),
                 type_=MessageType.INFO)
         except (ParsingError, CalledProcessError,) as err:
-            msg = mergeMsgs(_('ERROR'), _('LOADING_INTERFACES'))
+            msg = mergeMsgs(_('ERROR'), _('READING_INTERFACES'))
             self._msgvw.AddMessage(
                 msg,
                 type_=MessageType.ERROR)
@@ -336,98 +370,100 @@ class DnsWin(tk.Tk):
             fut: Future[tuple[dict[str, DnsServer], dict[
                 frozenset[IPv4Address], DnsServer]]],
             ) -> None:
-        from utils.funcs import dnsToSetIps
         try:
             self._mpNameDns, self._mpIpDns = fut.result()
-            self._dnsvw.populate(self._dnses)
+            self._dnsvw.populate(self._mpNameDns.values())
         except CancelledError:
             self._msgvw.AddMessage(
-                _('READING_DNSES_CANCELED'),
+                _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
-    
-    def _ipsExist(self, dns: DnsServer) -> int | None:
-        """Checks if IPv4 objects of the DNS server exist, if so informs
-        the user and returns its index otherwise returns `None`.
-        """
-        ipsSet = dns.ipsToSet()
-        for idx, item in enumerate(self._dnses):
-            if ipsSet == item.ipsToSet():
-                return idx
-        return None
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
-        from utils.funcs import dnsToSetIps
-        dnsDialog = DnsDialog(self, self._dnsNames)
+        dnsDialog = DnsDialog(self, self._mpNameDns)
         dns = dnsDialog.showDialog()
         if dns is None:
             return
-        # Checking existence of IPs...
-        ipsIdx = self._ipsExist(dns)
-        if isinstance(ipsIdx, int):
+        # Checking that IPs already exist...
+        ipsSet = dns.ipsToSet()
+        if ipsSet in self._mpIpDns:
             self._msgvw.AddMessage(
-                _('IPS_EXIST').format(self._dnses[ipsIdx].name),
+                _('IPS_EXIST').format(self._mpIpDns[ipsSet].name),
                 type_=MessageType.ERROR)
             return
         # Adding DNS server...
-        self._dnses.append(dns)
-        self._dnsNames.add(dns.name)
+        self._mpIpDns[ipsSet] = dns
+        self._mpNameDns[dns.name] = dns
         self._db.insertDns(dns)
         self._dnsvw.appendDns(dns)
     
     def _deleteDns(self) -> None:
         from tkinter.messagebox import askyesno
-        dnsIdx = self._dnsvw.getSetectedIdx()
-        if dnsIdx is None:
+        dnsName = self._dnsvw.getSetectedName()
+        if dnsName is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
-        dnsName = self._dnses[dnsIdx].name
         response = askyesno(message=_('CONFIRM_DEL_DNS').format(dnsName))
         if response is False:
             return
-        del self._dnses[dnsIdx]
-        del self._dnsNames[self._dnsNames.index(dnsName)[1]] # type: ignore
+        ipsSet = self._mpNameDns[dnsName].ipsToSet()
+        del self._mpNameDns[dnsName]
+        del self._mpIpDns[ipsSet]
         self._db.deleteDns(dnsName)
-        self._dnsvw.deleteIdx(dnsIdx)
+        self._dnsvw.deleteName(dnsName)
     
     def _editDns(self) -> None:
         from .dns_dialog import DnsDialog
         from utils.funcs import mergeMsgs
-        idx = self._dnsvw.getSetectedIdx()
-        if idx is None:
+        dnsName = self._dnsvw.getSetectedName()
+        if dnsName is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
-        dnsName = self._dnses[idx].name
-        slsIdx = self._dnsNames.index(dnsName)[1]
-        if isinstance(slsIdx, slice):
-            # Error: two or more DNS servers with the same name...
-            logging.error('E-1', dnsName, stack_info=True)
-            msg = mergeMsgs(_('ERROR'), _('DEL_DNS').format(dnsName))
-            self._msgvw.AddMessage(msg, 'E-1', MessageType.ERROR)
-            return
-        del self._dnsNames[slsIdx]
-        dnsDialog = DnsDialog(self, self._dnsNames, self._dnses[idx])
-        dns = dnsDialog.showDialog()
-        logging.debug(dns)
-        if (dns is None) or (dns == self._dnses[idx]):
+        dnsIps = self._mpNameDns[dnsName].ipsToSet()
+        cpyNameDns = self._mpNameDns.copy()
+        del cpyNameDns[dnsName]
+        dnsDialog = DnsDialog(self, cpyNameDns, self._mpNameDns[dnsName])
+        newDns = dnsDialog.showDialog()
+        if (newDns is None) or (newDns == self._mpNameDns[dnsName]):
             # No change, doing nothing...
-            self._dnsNames.add(dnsName)
             return
         # Checking existence of IPs...
-        ipsIdx = self._ipsExist(dns)
-        if isinstance(ipsIdx, int):
-            self._dnsNames.add(dnsName)
+        if newDns.ipsToSet() in self._mpIpDns:
             self._msgvw.AddMessage(
-                _('IPS_EXIST').format(self._dnses[ipsIdx].name),
+                _('IPS_EXIST').format(self._mpIpDns[newDns.ipsToSet()].name),
                 type_=MessageType.ERROR)
             return
         # Applying change...
-        self._dnses[idx] = dns
-        del self._dnsNames[slsIdx]
-        self._dnsNames.add(dns.name)
-        self._dnsvw.changeDns(idx, dns)
-        self._db.updateDns(dnsName, dns)
+        self._mpNameDns[newDns.name] = newDns
+        if newDns.name != dnsName:
+            del self._mpNameDns[dnsName]
+        self._mpIpDns[newDns.ipsToSet()] = newDns
+        if newDns.ipsToSet() != dnsIps:
+            del self._mpIpDns[dnsIps]
+        self._dnsvw.changeDns(dnsName, newDns)
+        self._db.updateDns(dnsName, newDns)
+    
+    def _clearDnsInfoPanel(self) -> None:
+        """Clears the DNS info panel."""
+        self._lfrm_dnsInfo.config(text='')
+        self._entry_primary.delete(0, tk.END)
+        self._entry_secondary.delete(0, tk.END)
+        self._msg_dnsName.config(text='')
+    
+    def _populateDnsInfoPanel(self, dns: DnsInfo | DnsServer) -> None:
+        logging.debug(dns)
+        if isinstance(dns, DnsInfo):
+            self._entry_primary.insert(0, dns.primary)
+            self._entry_secondary.insert(0, dns.secondary)
+            self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
+            self._msg_dnsName.config(text=dns.name)
+        elif isinstance(dns, DnsServer):
+            self._entry_primary.insert(0, str(dns.primary))
+            if dns.secondary:
+                self._entry_secondary.insert(0, str(dns.secondary))
+            self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
+            self._msg_dnsName.config(text=dns.name)

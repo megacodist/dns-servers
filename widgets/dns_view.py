@@ -5,7 +5,7 @@
 import logging
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, MutableSequence, TYPE_CHECKING
+from typing import Callable, Iterable, MutableSequence, TYPE_CHECKING
 
 from db import DnsServer
 
@@ -31,13 +31,13 @@ class Dnsview(tk.Frame):
         self._SECON_COL_IDX = 2
         self._cbDoubleClicked = double_clicked_cb
         """The callback to be called if an item is double clicked."""
-        self._mpIdxIid: dict[int, str] = {}
-        """The mapping from index to iid of the items in the view:
-        `index -> iid`
+        self._mpNameIid: dict[str, str] = {}
+        """The mapping from name to iid of the items in the view:
+        `name -> iid`
         """
-        self._mpIidIdx: dict[str, int] = {}
-        """The mapping from iid to index of the items in the view:
-        `iid -> index`
+        self._mpIidName: dict[str, str] = {}
+        """The mapping from iid to name of the items in the view:
+        `iid -> name`
         """
         self._initGui(
             name_col_width,
@@ -124,8 +124,8 @@ class Dnsview(tk.Frame):
         """Clears all DNS servers from the View."""
         for child in self._trvw.get_children():
             self._trvw.delete(child)
-        self._mpIidIdx.clear()
-        self._mpIdxIid.clear()
+        self._mpIidName.clear()
+        self._mpNameIid.clear()
     
     def getColsWidth(self) -> tuple[int, int, int]:
         """Returns the width of `Name`, `Primary`, and `Secondary` columns
@@ -137,8 +137,8 @@ class Dnsview(tk.Frame):
         colsWidth.append(self._trvw.column(self._SECON_COL_IDX, 'width'))
         return tuple(colsWidth) # type: ignore
     
-    def getSetectedIdx(self) -> int | None:
-        """Gets the zero-based index of the selected DNS server in the
+    def getSetectedName(self) -> str | None:
+        """Gets the name of the selected DNS server in the
         View. If nothing is selected, it returns `None`.
         """
         selection = self._trvw.selection()
@@ -146,37 +146,36 @@ class Dnsview(tk.Frame):
             case 0:
                 return None
             case 1:
-                return self._mpIidIdx[selection[0]]
+                return self._mpIidName[selection[0]]
             case _:
                 logging.error(
                     'more than one item in the Dnsview is selected',
                     stack_info=True,)
     
-    def populate(self, dnses: MutableSequence[DnsServer]) -> None:
+    def populate(self, dnses: Iterable[DnsServer]) -> None:
         self.clear()
-        for idx, dns in enumerate(dnses):
+        for dns in dnses:
             iid = self._trvw.insert(
                 parent='',
                 index=tk.END,
                 values=self._dnsToValues(dns))
-            self._mpIidIdx[iid] = idx
-            self._mpIdxIid[idx] = iid
+            self._mpIidName[iid] = dns.name
+            self._mpNameIid[dns.name] = iid
     
     def appendDns(self, dns: DnsServer) -> None:
-        idx = len(self._mpIdxIid)
         iid = self._trvw.insert(
             parent='',
             index=tk.END,
             values=self._dnsToValues(dns))
-        self._mpIdxIid[idx] = iid
-        self._mpIidIdx[iid] = idx
+        self._mpIidName[iid] = dns.name
+        self._mpNameIid[dns.name] = iid
     
-    def deleteIdx(self, idx: int) -> None:
-        iid = self._mpIdxIid[idx]
+    def deleteName(self, name: str) -> None:
+        iid = self._mpNameIid[name]
         self._trvw.delete(iid)
-        del self._mpIdxIid[idx]
-        del self._mpIidIdx[iid]
+        del self._mpNameIid[name]
+        del self._mpIidName[iid]
     
-    def changeDns(self, idx: int, dns: DnsServer) -> None:
-        iid = self._mpIdxIid[idx]
-        self._trvw.item(iid, values=self._dnsToValues(dns))
+    def changeDns(self, old_name: str, new_dns: DnsServer) -> None:
+        iid = self._mpNameIid[old_name]
+        self._trvw.item(iid, values=self._dnsToValues(new_dns))

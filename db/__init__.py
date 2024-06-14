@@ -5,6 +5,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from ipaddress import IPv4Address
+from math import e
 from typing import MutableSequence
 
 
@@ -14,16 +15,34 @@ class DnsInfo:
     """
     def __init__(
             self,
-            name: str,
-            primary: str,
-            secondary: str,
+            name: str = '',
+            primary: str = '',
+            secondary: str = '',
             ) -> None:
         self.name = name
         self.primary = primary
         self.secondary = secondary
+    
+    def __repr__(self) -> str:
+        return (f'<{self.__class__.__qualname__} name={self.name} '
+            f'primary={self.primary} secondary={self.secondary}>')
 
 
 class DnsServer:
+    @classmethod
+    def primSeconToSet(
+            cls,
+            primary: IPv4Address,
+            secondary: IPv4Address | None,
+            ) -> frozenset[IPv4Address]:
+        """Converts the combination of primary and secondary IPs to a
+        `frozenset[IPv4Address]` object.
+        """
+        if secondary:
+            return frozenset([primary, secondary,])
+        else:
+            return frozenset([primary,])
+
     def __init__(
             self,
             name: str,
@@ -53,10 +72,7 @@ class DnsServer:
         """Returns IPs as a `frozenset` object. If the secondary IP is
         `None`, the result only contains primary IP.
         """
-        if self._secondary:
-            return frozenset({self._primary, self._secondary,})
-        else:
-            return frozenset({self._primary,})
+        return DnsServer.primSeconToSet(self._primary, self._secondary)
     
     def ipsEqual(self, dns: DnsServer) -> bool:
         """Specifies whether IP set of this object equals the provided
@@ -111,6 +127,6 @@ class IDatabase(ABC):
         pass
 
     @abstractmethod
-    def updateDns(self, dns_name: str, new_dns: DnsServer) -> None:
+    def updateDns(self, old_name: str, new_dns: DnsServer) -> None:
         """Updates the specified DNS server object with the new one."""
         pass

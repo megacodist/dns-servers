@@ -65,20 +65,20 @@ msgstr "Invalid settings file, using defaults"
 msgid "CREATING_WIN"
 msgstr "Creating app window..."
 
-msgid "LOADING_INTERFACES_CANCELED"
-msgstr "Loading network interfaces was canceled."
+msgid "X_CANCELED"
+msgstr "{} was canceled"
 
-msgid "LOADING_INTERFACES"
+msgid "READING_INTERFACES"
 msgstr "Loading network interfaces"
 
-msgid "READING_DB"
-msgstr "Reading the database"
+msgid "READING_DNSES"
+msgstr "Reading DNS servers from the database"
+
+msgid "READING_DNS_INFO"
+msgstr "Reading DNS info"
 
 msgid "CONSTRUCTING_DATA"
 msgstr "Constructing data structures"
-
-msgid "READING_DNSES_CANCELED"
-msgstr "Loading DNS servers was canceled."
 
 msgid "ENTER_DNS"
 msgstr "Enter a DNS server"

@@ -2,12 +2,14 @@
 # 
 #
 
+from ipaddress import AddressValueError
 import logging
 from collections import namedtuple
 import re
 from typing import MutableSequence, ValuesView
 
 from db import DnsInfo, DnsServer
+from widgets.dns_win import IPv4Address
 
 
 class ParsingError(Exception):
@@ -197,14 +199,18 @@ def GetInterfacesNames() -> MutableSequence[str]:
         raise NetOpFailedError('Unable to read network interface names.')
 
 
-def GetDnsServers(name: str) -> DnsInfo | DnsServer:
+def readDnsInfo(
+        inter_name: str,
+        mp_ip_dns: dict[frozenset[IPv4Address], DnsServer],
+        ) -> DnsInfo | DnsServer:
     """Gets DNS servers for the specified network interface.
 
     #### Exceptions:
     1. `subprocess.CalledProcessError`
+    2. `ParsingError`
     """
     import subprocess
-    command = ['netsh', 'interface', 'ip', 'show', 'dns', name]
+    command = ['netsh', 'interface', 'ip', 'show', 'dns', inter_name]
     process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -217,6 +223,34 @@ def GetDnsServers(name: str) -> DnsInfo | DnsServer:
             cmd=command,
             output=error,
             stderr=error,)
-    lines = output.splitlines()
-    lines = [line.split() for line in lines if line.split()]
-    return output
+    # Parsing result...
+    lines = [
+        line.strip().lower()
+        for line in output.splitlines()
+        if line.strip()]
+    logging.debug('\n'.join(lines))
+    if not inter_name.lower() in lines[0]:
+        raise ParsingError('Interface name did not find in output', lines)
+    if 'dhcp' in lines[1]:
+        return DnsInfo(name='DHCP',)
+    if 'static' in lines[1]:
+        try:
+            colonIdx = lines[1].index(':')
+        except ValueError:
+            raise ParsingError('cannot parse primary IP', lines)
+        try:
+            primary = IPv4Address(lines[1][(colonIdx + 1):].strip())
+        except AddressValueError:
+            return DnsInfo()
+        try:
+            seconadry = IPv4Address(lines[2].strip())
+        except AddressValueError:
+            seconadry = None
+        ipsSet = DnsServer.primSeconToSet(primary, seconadry)
+        if ipsSet in mp_ip_dns:
+            return mp_ip_dns[ipsSet]
+        else:
+            return DnsInfo(
+                primary=str(primary),
+                secondary=str(seconadry) if seconadry else '')
+    raise ParsingError('cannot detect either DHCP or static IPs')

@@ -56,9 +56,11 @@ class SqliteDb(IDatabase):
     def selctAllDnses(self) -> list[DnsServer]:
         sql = """
             SELECT
-                name, primary_, secondary
+                id, name, primary_, secondary
             FROM
-                dns_servers;
+                dns_servers
+            ORDER BY
+                id;
         """
         cur = self._conn.cursor()
         cur = cur.execute(sql)
@@ -72,7 +74,7 @@ class SqliteDb(IDatabase):
             INSERT INTO
                 dns_servers(name, primary_, secondary)
             VALUES
-                (?, ?, ?)
+                (?, ?, ?);
         """
         cur = self._conn.cursor()
         cur = cur.execute(sql, self._dnsToTuple(dns))
@@ -90,21 +92,21 @@ class SqliteDb(IDatabase):
             DELETE FROM
                 dns_servers
             WHERE
-                {} = ?
+                {} = ?;
         """.format(specifier)
         cur = self._conn.cursor()
         cur = cur.execute(sql, (dns_spec,))
         self._conn.commit()
     
-    def updateDns(self, dns_name: str, new_dns: DnsServer) -> None:
+    def updateDns(self, old_name: str, new_dns: DnsServer) -> None:
         sql = """
             UPDATE
                 dns_servers
             SET
                 name = ?, primary_ = ?, secondary = ?
             WHERE
-                name = ?
+                name = ?;
         """
         cur = self._conn.cursor()
-        cur = cur.execute(sql, (*self._dnsToTuple(new_dns), dns_name,))
+        cur = cur.execute(sql, (*self._dnsToTuple(new_dns), old_name,))
         self._conn.commit()
