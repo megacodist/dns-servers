@@ -256,6 +256,39 @@ class DnsWin(tk.Tk):
         self._msgvw = MessageView(self._pdwin, self._IMG_CLOSE)
         self._msgvw.pack(fill=tk.BOTH, expand=1)
         self._pdwin.add(self._msgvw, weight=1)
+        # Creating menu bar...
+        self._menubar = tk.Menu(
+            master=self)
+        self.config(menu=self._menubar)
+        # Creating `App` menu...
+        self._menu_app = tk.Menu(
+            master=self._menubar,
+            tearoff=0)
+        self._menubar.add_cascade(
+            label='App',
+            menu=self._menu_app)
+        self._menu_app.add_cascade(
+            label='Quit',
+            command=self._onWinClosing)
+        # Creating `Commands` menu...
+        self._menu_cmds = tk.Menu(
+            master=self._menubar,
+            tearoff=0)
+        self._menubar.add_cascade(
+            label='Commands',
+            menu=self._menu_cmds)
+        self._menu_cmds.add_command(
+            label='Clear messages',
+            command=self._msgvw.Clear)
+        self._menu_cmds.add_cascade(
+            label='Read network interfaces',
+            command=self._readInterfaces)
+        self._menu_cmds.add_cascade(
+            label='Read DNS servers',
+            command=self._readDnses)
+        self._menu_cmds.add_cascade(
+            label='Test a URL',
+            command=self._testUrl)
     
     def _onWinClosing(self) -> None:
         # Releasing images...
@@ -301,8 +334,8 @@ class DnsWin(tk.Tk):
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
-        self._loadInterfaces()
-        self._loadDnses()
+        self._readInterfaces()
+        self._readDnses()
     
     def _readDnsInfo(self, idx: int) -> None:
         from utils.funcs import readDnsInfo
@@ -333,14 +366,14 @@ class DnsWin(tk.Tk):
                 type_=MessageType.ERROR)
             logging.error('E2', err)
     
-    def _loadInterfaces(self) -> None:
+    def _readInterfaces(self) -> None:
         from utils.funcs import listInterfaces
         self._asyncMngr.InitiateOp(
             start_cb=listInterfaces,
-            finish_cb=self._onInterfacesLoaded,
+            finish_cb=self._onInterfacesRead,
             widgets=(self._intervw,))
     
-    def _onInterfacesLoaded(self, fut: Future[list[InterfaceAttrs]]) -> None:
+    def _onInterfacesRead(self, fut: Future[list[InterfaceAttrs]]) -> None:
         from subprocess import CalledProcessError
         from ntwrk import ParsingError
         from utils.funcs import mergeMsgs
@@ -358,14 +391,14 @@ class DnsWin(tk.Tk):
                 type_=MessageType.ERROR)
             logging.error('E2', err)
     
-    def _loadDnses(self) -> None:
+    def _readDnses(self) -> None:
         from utils.funcs import listDnses
         self._asyncMngr.InitiateOp(
             start_cb=listDnses,
             start_args=(self._db,),
-            finish_cb=self._onDnsesLoaded)
+            finish_cb=self._onDnsesRead)
 
-    def _onDnsesLoaded(
+    def _onDnsesRead(
             self,
             fut: Future[tuple[dict[str, DnsServer], dict[
                 frozenset[IPv4Address], DnsServer]]],
@@ -432,7 +465,7 @@ class DnsWin(tk.Tk):
             # No change, doing nothing...
             return
         # Checking existence of IPs...
-        if newDns.ipsToSet() in self._mpIpDns:
+        if newDns.ipsToSet() in cpyNameDns:
             self._msgvw.AddMessage(
                 _('IPS_EXIST').format(self._mpIpDns[newDns.ipsToSet()].name),
                 type_=MessageType.ERROR)
@@ -467,3 +500,6 @@ class DnsWin(tk.Tk):
                 self._entry_secondary.insert(0, str(dns.secondary))
             self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
             self._msg_dnsName.config(text=dns.name)
+    
+    def _testUrl(self) -> None:
+        pass

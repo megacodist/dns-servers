@@ -29,6 +29,15 @@ msgstr "Primary"
 msgid "SECONDARY"
 msgstr "Secondary"
 
+msgid "RESPONSE"
+msgstr "Response"
+
+msgid "LATENCY"
+msgstr "Latency"
+
+msgid "START"
+msgstr "Start"
+
 msgid "OK"
 msgstr "OK"
 
