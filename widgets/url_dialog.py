@@ -41,23 +41,28 @@ class UrlDialog(tk.Toplevel):
             self,
             master: tk.Misc,
             mp_name_dns: dict[str, DnsServer],
-            dns: DnsServer,
             tick_img: TkImg,
             cross_img: TkImg,
+            arrow_img: TkImg,
             ) -> None:
         super().__init__(master)
-        self.title(_('ENTER_DNS'))
+        self.title(_('TEST_URL'))
         self.resizable(False, False)
         self.grab_set()
         #
         self._result = None
         self._mpNameDns = mp_name_dns
         self._mpNameRes = {key:_HttpRes() for key in self._mpNameDns}
+        self._mpIidName = dict[str, str]()
+        self._IMG_TICK = tick_img
+        self._IMG_CROSS = cross_img
+        self._IMG_ARROW = arrow_img
         self._NAME_COL_IDX = 1
         self._RES_COL_IDX = 2
         self._DELAY_COL_IDX = 3
         # Initializing the GUI...
         self._initGui()
+        self._populateDnses()
         # Bindings...
         #self.bind('<Return>', lambda _: self._onApproved())
         self.bind('<Escape>', lambda _: self._onCanceled())
@@ -89,16 +94,19 @@ class UrlDialog(tk.Toplevel):
         self._frm_url = ttk.Frame(self._frm_container)
         self._frm_url.pack(side=tk.TOP, fill=tk.X, expand=True)
         #
-        self._lbl_url = ttk.Label(self._frm_url, text='URL')
-        self._lbl_url.pack(side=tk.LEFT)
+        self._lbl_url = ttk.Label(self._frm_url, text=(_('URL') + ':'))
+        self._lbl_url.pack(side=tk.LEFT, padx=2, pady=2)
         #
-        self._entry_url = ttk.Entry(self._frm_url)
-        self._entry_url.pack(fill=tk.BOTH, expand=True)
+        self._svar_url = tk.StringVar(self)
+        self._entry_url = ttk.Entry(
+            self._frm_url,
+            textvariable=self._svar_url)
+        self._entry_url.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         #
         self._frm_dnses = ttk.Frame(self._frm_container)
         self._frm_dnses.columnconfigure(0, weight=1)
         self._frm_dnses.rowconfigure(0, weight=1)
-        self._frm_dnses.pack(fill=tk.BOTH, expand=True)
+        self._frm_dnses.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         #
         self._vscrlbr = ttk.Scrollbar(
             self._frm_dnses,
@@ -129,7 +137,7 @@ class UrlDialog(tk.Toplevel):
             self._NAME_COL_IDX,
             self._RES_COL_IDX,
             self._DELAY_COL_IDX,))
-        self._trvw.column('#0', width=0, stretch=tk.NO)  # Hidden column for tree structure
+        self._trvw.column('#0', width=40, stretch=tk.NO)  # Hidden column for tree structure
         self._trvw.column(
             self._NAME_COL_IDX,
             anchor=tk.W,
@@ -155,13 +163,7 @@ class UrlDialog(tk.Toplevel):
             anchor=tk.W)
         #
         self._frm_btns = ttk.Frame(self._frm_container)
-        self._frm_btns.grid(
-            row=4,
-            column=0,
-            columnspan=2,
-            padx=2,
-            pady=2,
-            sticky=tk.NSEW)
+        self._frm_btns.pack(fill=tk.X, expand=True, padx=2, pady=2)
         #
         self._btn_startOk = ttk.Button(
             self._frm_btns,
@@ -178,9 +180,24 @@ class UrlDialog(tk.Toplevel):
             command=self._onCanceled)
         self._btn_cancel.pack(side=tk.RIGHT, padx=5, pady=5)
     
+    def _populateDnses(self) -> None:
+        for name in self._mpNameDns:
+            iid = self._trvw.insert(
+                parent='',
+                index=tk.END,
+                image=self._IMG_ARROW, # type: ignore
+                values=(self._mpNameDns[name].name, '', ''))
+            self._mpIidName[iid] = name
+    
     def _start(self) -> None:
+        from urllib.parse import urlparse, urlunparse
         self._btn_startOk.config(text=_('OK'))
         self._btn_startOk.config(state=tk.DISABLED)
+        self._svar_url.set(urlunparse(
+            urlparse(
+                self._svar_url.get(),
+                scheme='https')))
+        self._entry_url.config(state=tk.DISABLED)
     
     def showDialog(self) -> None:
         """Shows the dialog box and returns a `DnsServer` on completion

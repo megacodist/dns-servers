@@ -73,3 +73,7 @@ class InterfaceView(tk.Frame):
     
     def clear(self) -> None:
         self._lstbx.delete(0, tk.END)
+    
+    def getSelectedIdx(self) -> int:
+        """Gets the index of selected interface."""
+        return self._lstbx.curselection()

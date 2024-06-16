@@ -62,11 +62,17 @@ class DnsWin(tk.Tk):
         self._HIMG_REMOVE: PIL.Image.Image
         self._HIMG_EDIT: PIL.Image.Image
         self._HIMG_APPLY: PIL.Image.Image
+        self._HIMG_GTICK: PIL.Image.Image
+        self._HIMG_REDX: PIL.Image.Image
+        self._HIMG_ARROW: PIL.Image.Image
         self._IMG_CLOSE: TkImg
         self._IMG_ADD: TkImg
         self._IMG_REMOVE: TkImg
         self._IMG_EDIT: TkImg
         self._IMG_APPLY: TkImg
+        self._IMG_GTICK: TkImg
+        self._IMG_REDX: TkImg
+        self._IMG_ARROW: TkImg
         # Loading resources...
         self._loadRes()
         # Initializing the GUI...
@@ -103,6 +109,18 @@ class DnsWin(tk.Tk):
         self._HIMG_APPLY = PIL.Image.open(self._RES_DIR / 'apply.png')
         self._HIMG_APPLY = self._HIMG_APPLY.resize(size=(16, 16,))
         self._IMG_APPLY = PIL.ImageTk.PhotoImage(image=self._HIMG_APPLY)
+        # Loading 'gtick.png...
+        self._HIMG_GTICK = PIL.Image.open(self._RES_DIR / 'gtick.png')
+        self._HIMG_GTICK = self._HIMG_GTICK.resize(size=(16, 16,))
+        self._IMG_GTICK = PIL.ImageTk.PhotoImage(image=self._HIMG_GTICK)
+        # Loading 'redx.png...
+        self._HIMG_REDX = PIL.Image.open(self._RES_DIR / 'redx.png')
+        self._HIMG_REDX = self._HIMG_REDX.resize(size=(16, 16,))
+        self._IMG_REDX = PIL.ImageTk.PhotoImage(image=self._HIMG_REDX)
+        # Loading 'arrow.png...
+        self._HIMG_ARROW = PIL.Image.open(self._RES_DIR / 'arrow.png')
+        self._HIMG_ARROW = self._HIMG_ARROW.resize(size=(16, 16,))
+        self._IMG_ARROW = PIL.ImageTk.PhotoImage(image=self._HIMG_ARROW)
     
     def _initGui(self) -> None:
         #
@@ -238,6 +256,7 @@ class DnsWin(tk.Tk):
         #
         self._btn_applyDns = ttk.Button(
             self._frm_dnsButns,
+            command=self._applyDns,
             image=self._IMG_APPLY) # type: ignore
         self._btn_applyDns.pack(
             side=tk.LEFT)
@@ -265,29 +284,29 @@ class DnsWin(tk.Tk):
             master=self._menubar,
             tearoff=0)
         self._menubar.add_cascade(
-            label='App',
+            label=_('APP'),
             menu=self._menu_app)
         self._menu_app.add_cascade(
-            label='Quit',
+            label=_('QUIT'),
             command=self._onWinClosing)
         # Creating `Commands` menu...
         self._menu_cmds = tk.Menu(
             master=self._menubar,
             tearoff=0)
         self._menubar.add_cascade(
-            label='Commands',
+            label=_('CMDS'),
             menu=self._menu_cmds)
         self._menu_cmds.add_command(
-            label='Clear messages',
+            label=_('CLEAR_MSGS'),
             command=self._msgvw.Clear)
         self._menu_cmds.add_cascade(
-            label='Read network interfaces',
+            label=_('READ_INTERFACES'),
             command=self._readInterfaces)
         self._menu_cmds.add_cascade(
-            label='Read DNS servers',
+            label=_('READ_DNSES'),
             command=self._readDnses)
         self._menu_cmds.add_cascade(
-            label='Test a URL',
+            label=_('TEST_URL'),
             command=self._testUrl)
     
     def _onWinClosing(self) -> None:
@@ -298,6 +317,9 @@ class DnsWin(tk.Tk):
         self._HIMG_REMOVE.close()
         self._HIMG_EDIT.close()
         self._HIMG_APPLY.close()
+        self._HIMG_GTICK.close()
+        self._HIMG_REDX.close()
+        self._HIMG_ARROW.close()
         #
         self._saveGeometry()
         self._settings.left_panel_width = self._pdwin.sashpos(0)
@@ -410,6 +432,22 @@ class DnsWin(tk.Tk):
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
+    
+    def _applyDns(self) -> None:
+        from utils.funcs import setDns
+        interIdx = self._intervw.getSelectedIdx()
+        interName: str = self._interfaces[interIdx]['Name'] # type: ignore
+        if dnsName is None:
+            self._msgvw.AddMessage(
+                _('SELECT_ITEM_DNS_VIEW'),
+                type_=MessageType.WARNING)
+            return
+        self._asyncMngr.InitiateOp(
+            start_cb=setDns,
+            start_args=(dnsName, ))
+
+    def _onDnsApplied(self) -> None:
+        pass
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
@@ -502,4 +540,13 @@ class DnsWin(tk.Tk):
             self._msg_dnsName.config(text=dns.name)
     
     def _testUrl(self) -> None:
-        pass
+        from widgets.url_dialog import UrlDialog
+        dnsDialog = UrlDialog(
+            self,
+            self._mpNameDns,
+            self._IMG_GTICK,
+            self._IMG_REDX,
+            self._IMG_ARROW)
+        dns = dnsDialog.showDialog()
+        if dns is None:
+            return

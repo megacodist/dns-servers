@@ -20,8 +20,20 @@ msgstr ""
 msgid "APP_NAME"
 msgstr "DNS server manager"
 
+msgid "APP"
+msgstr "App"
+
 msgid "NAME"
 msgstr "Name"
+
+msgid "URL"
+msgstr "URL"
+
+msgid "QUIT"
+msgstr "Quit"
+
+msgid "CMDS"
+msgstr "Commands"
 
 msgid "PRIMARY"
 msgstr "Primary"
@@ -53,6 +65,9 @@ msgstr "DNS servers"
 msgid "NET_INTERS"
 msgstr "Network interfaces"
 
+msgid "CLEAR_MSGS"
+msgstr "Clear messages"
+
 msgid "CONFIRM_DEL_DNS"
 msgstr "Are you sure to delete '{}' DNS server?"
 
@@ -74,17 +89,29 @@ msgstr "Invalid settings file, using defaults"
 msgid "CREATING_WIN"
 msgstr "Creating app window..."
 
+msgid "TEST_URL"
+msgstr "Test a URL"
+
 msgid "X_CANCELED"
 msgstr "{} was canceled"
 
+msgid "READ_INTERFACES"
+msgstr "Read network interfaces"
+
 msgid "READING_INTERFACES"
-msgstr "Loading network interfaces"
+msgstr "Reading network interfaces"
+
+msgid "READ_DNSES"
+msgstr "Read DNS servers"
 
 msgid "READING_DNSES"
 msgstr "Reading DNS servers from the database"
 
 msgid "READING_DNS_INFO"
 msgstr "Reading DNS info"
+
+msgid "SETTING_DNS"
+msgstr "Setting DNS servers of '{}' to '{}'"
 
 msgid "CONSTRUCTING_DATA"
 msgstr "Constructing data structures"

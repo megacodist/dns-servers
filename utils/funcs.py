@@ -45,6 +45,7 @@ def listDnses(
     mpIpDns = {dns.ipsToSet():dns for dns in dnses}
     return mpNameDns, mpIpDns
 
+
 def readDnsInfo(
         q: Queue[str] | None,
         inter_name: str,
@@ -54,6 +55,14 @@ def readDnsInfo(
     if q:
         q.put(_('READING_DNS_INFO'))
     return readDnsInfo(inter_name, mp_ip_dns,)
+
+
+def setDns(q: Queue | None, inter_name: str, dns: DnsServer) -> None:
+    from ntwrk import setDns
+    if q:
+        q.put(_('SETTING_DNS').format(inter_name, dns.name))
+    setDns(inter_name, dns)
+
 
 def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
     """Converts a `DnsServer` object into a set of one or two IPv4

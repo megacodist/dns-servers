@@ -254,3 +254,15 @@ def readDnsInfo(
                 primary=str(primary),
                 secondary=str(seconadry) if seconadry else '')
     raise ParsingError('cannot detect either DHCP or static IPs')
+
+
+def setDns(inter_name: str, dns: DnsServer) -> None:
+    """Sets the DNS servers of the specified interface names."""
+    import subprocess
+    primCmd = (f'netsh interface ip set dns "{inter_name}" '
+        f'static {dns.primary}')
+    res = subprocess.run(primCmd, shell=True, check=True, text=True)
+    logging.debug(res.stdout)
+    seconCmd = f'netsh interface ip add address name="{inter_name}" {dns.secondary}'
+    res = subprocess.run(seconCmd, shell=True, check=True, text=True)
+    logging.debug(res.stdout)
