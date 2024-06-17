@@ -5,6 +5,7 @@
 import base64
 import hashlib
 import hmac
+from ipaddress import IPv4Address
 import logging
 from os import PathLike
 import pickle
@@ -20,18 +21,42 @@ TkImg = PIL.ImageTk.PhotoImage
 """Tkinter compatible image type."""
 
 
+class DnsInfo:
+    """This class is used when DNS servers information is not possible
+    via `DnsServer`.
+    """
+    def __init__(
+            self,
+            primary: IPv4Address | None = None,
+            secondary: IPv4Address | None = None,
+            ) -> None:
+        self.primary = primary
+        self.secondary = secondary
+    
+    def ipsToSet(self) -> frozenset[IPv4Address]:
+        from db import DnsServer
+        return DnsServer.primSeconToSet(self.primary, self.secondary)
+    
+    def __repr__(self) -> str:
+        from utils.funcs import ipToStr
+        return (f'<{self.__class__.__qualname__} '
+            f'primary={ipToStr(self.primary)} '
+            f'secondary={ipToStr(self.secondary)}>')
+
+
 class GifImage:
     """It is actually a list of `PIL.ImageTk.PhotoImage` to hold the
     GIF frames. The objects of this class support zero-based integer
     subscript notation for reading, not setting, GIF frames.
     """
     def __init__(self, gif: PathLike) -> None:
+        from os import fspath
         from PIL import ImageSequence
         self._frames: list[TkImg] = []
         """The frames of this GIF image."""
         self._idx: int = 0
         """The index of the next frame."""
-        self._HGIF_WAIT = PIL.Image.open(gif)
+        self._HGIF_WAIT = PIL.Image.open(fspath(gif))
         for frame in ImageSequence.Iterator(self._HGIF_WAIT):
             frame = frame.convert("RGBA")
             self._frames.append(PIL.ImageTk.PhotoImage(frame))

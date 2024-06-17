@@ -5,10 +5,11 @@
 from ipaddress import AddressValueError
 import logging
 from collections import namedtuple
+from multiprocessing import Value
 import re
-from typing import MutableSequence, ValuesView
+from typing import Literal, MutableSequence
 
-from db import DnsInfo, DnsServer
+from utils.types import DnsInfo
 from widgets.dns_win import IPv4Address
 
 
@@ -201,9 +202,9 @@ def GetInterfacesNames() -> MutableSequence[str]:
 
 def readDnsInfo(
         inter_name: str,
-        mp_ip_dns: dict[frozenset[IPv4Address], DnsServer],
-        ) -> DnsInfo | DnsServer:
-    """Gets DNS servers for the specified network interface.
+        ) -> DnsInfo | Literal['DHCP']:
+    """Gets DNS servers for the specified network interface. It returns
+    `None` if the network interface uses DHCP.
 
     #### Exceptions:
     1. `subprocess.CalledProcessError`
@@ -232,37 +233,80 @@ def readDnsInfo(
     if not inter_name.lower() in lines[0]:
         raise ParsingError('Interface name did not find in output', lines)
     if 'dhcp' in lines[1]:
-        return DnsInfo(name='DHCP',)
+        return 'DHCP'
     if 'static' in lines[1]:
         try:
             colonIdx = lines[1].index(':')
         except ValueError:
             raise ParsingError('cannot parse primary IP', lines)
+        res = DnsInfo()
         try:
-            primary = IPv4Address(lines[1][(colonIdx + 1):].strip())
+            res.primary = IPv4Address(lines[1][(colonIdx + 1):].strip())
         except AddressValueError:
-            return DnsInfo()
+            return res
         try:
-            seconadry = IPv4Address(lines[2].strip())
+            res.secondary = IPv4Address(lines[2].strip())
         except AddressValueError:
-            seconadry = None
-        ipsSet = DnsServer.primSeconToSet(primary, seconadry)
-        if ipsSet in mp_ip_dns:
-            return mp_ip_dns[ipsSet]
-        else:
-            return DnsInfo(
-                primary=str(primary),
-                secondary=str(seconadry) if seconadry else '')
+            pass
+        return res
     raise ParsingError('cannot detect either DHCP or static IPs')
 
 
-def setDns(inter_name: str, dns: DnsServer) -> None:
-    """Sets the DNS servers of the specified interface names."""
+def setDns(
+        inter_name: str,
+        primary: IPv4Address | None,
+        secondary: IPv4Address | None,
+        ) -> None:
+    """Sets the DNS servers of the specified interface names. At least
+    one IP must be available otherwise `ValueError` is raised.
+
+    #### Exceptions:
+    1. `TypeError`
+    2. `ValueError`
+    3. `subprocess.CalledProcessError`
+    """
     import subprocess
-    primCmd = (f'netsh interface ip set dns "{inter_name}" '
-        f'static {dns.primary}')
-    res = subprocess.run(primCmd, shell=True, check=True, text=True)
-    logging.debug(res.stdout)
-    seconCmd = f'netsh interface ip add address name="{inter_name}" {dns.secondary}'
-    res = subprocess.run(seconCmd, shell=True, check=True, text=True)
-    logging.debug(res.stdout)
+    PRIM_CMD = 'netsh interface ip set dns "{}" static {}'
+    SECON_CND = 'netsh interface ip add address name="{}" {}'
+    ips = list[IPv4Address]()
+    if primary is not None:
+        if not isinstance(primary, IPv4Address):
+            raise TypeError(f"primary must be {IPv4Address.__qualname__} "
+                f"not {primary.__class__}")
+        ips.append(primary)
+    if secondary is not None:
+        if not isinstance(secondary, IPv4Address):
+            raise TypeError(f"secondary must be {IPv4Address.__qualname__} "
+                f"not {secondary.__class__}")
+        ips.append(secondary)
+    if len(ips) == 0:
+        raise ValueError('both primary and secondary cannot be `None`')
+    # Setting primary DNS server...
+    command = PRIM_CMD.format(inter_name, ips[0])
+    netsh = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True)
+    _, error = netsh.communicate()
+    if error:
+        raise subprocess.CalledProcessError(
+            returncode=netsh.returncode,
+            cmd=command,
+            output=error,
+            stderr=error,)
+    # Setting secondary DNS server...
+    if len(ips) == 2:
+        command = SECON_CND.format(inter_name, ips[1])
+        netsh = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True)
+        _, error = netsh.communicate()
+        if error:
+            raise subprocess.CalledProcessError(
+                returncode=netsh.returncode,
+                cmd=command,
+                output=error,
+                stderr=error,)

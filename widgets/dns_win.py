@@ -8,20 +8,19 @@ import logging
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING, Literal
 
 import PIL.Image
 import PIL.ImageTk
 
-from db import DnsInfo, DnsServer, IDatabase
-from ntwrk import InterfaceAttrs
-
 from .dns_view import Dnsview
 from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
+from db import DnsServer, IDatabase
+from ntwrk import InterfaceAttrs
 from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
-from utils.types import GifImage, TkImg
+from utils.types import DnsInfo, GifImage, TkImg
 
 
 if TYPE_CHECKING:
@@ -370,7 +369,7 @@ class DnsWin(tk.Tk):
             finish_cb=self._onDnsInfoRead,
             widgets=(self._lfrm_dnsInfo,))
     
-    def _onDnsInfoRead(self, fut: Future[DnsInfo | DnsServer]) -> None:
+    def _onDnsInfoRead(self, fut: Future[DnsInfo | Literal['DHCP']]) -> None:
         from subprocess import CalledProcessError
         from ntwrk import ParsingError
         from utils.funcs import mergeMsgs
@@ -436,15 +435,15 @@ class DnsWin(tk.Tk):
     def _applyDns(self) -> None:
         from utils.funcs import setDns
         interIdx = self._intervw.getSelectedIdx()
-        interName: str = self._interfaces[interIdx]['Name'] # type: ignore
-        if dnsName is None:
+        if interIdx is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
+        interName: str = self._interfaces[interIdx]['Name'] # type: ignore
         self._asyncMngr.InitiateOp(
             start_cb=setDns,
-            start_args=(dnsName, ))
+            start_args=(interName, ))
 
     def _onDnsApplied(self) -> None:
         pass
@@ -525,19 +524,25 @@ class DnsWin(tk.Tk):
         self._entry_secondary.delete(0, tk.END)
         self._msg_dnsName.config(text='')
     
-    def _populateDnsInfoPanel(self, dns: DnsInfo | DnsServer) -> None:
+    def _populateDnsInfoPanel(self, dns: DnsInfo | Literal['DHCP']) -> None:
+        from utils.funcs import ipToStr
         logging.debug(dns)
-        if isinstance(dns, DnsInfo):
-            self._entry_primary.insert(0, dns.primary)
-            self._entry_secondary.insert(0, dns.secondary)
+        if dns is 'DHCP':
+            self._entry_primary.insert(0, '')
+            self._entry_secondary.insert(0, '')
             self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
-            self._msg_dnsName.config(text=dns.name)
-        elif isinstance(dns, DnsServer):
-            self._entry_primary.insert(0, str(dns.primary))
-            if dns.secondary:
-                self._entry_secondary.insert(0, str(dns.secondary))
+            self._msg_dnsName.config(text='DHCP')
+        elif isinstance(dns, DnsInfo):
+            self._entry_primary.insert(0, ipToStr(dns.primary))
+            self._entry_secondary.insert(0, ipToStr(dns.secondary))
+            try:
+                name = self._mpIpDns[dns.ipsToSet()].name
+            except KeyError:
+                name = ''
             self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
-            self._msg_dnsName.config(text=dns.name)
+            self._msg_dnsName.config(text=name)
+        else:
+            logging.error('E3', dns)
     
     def _testUrl(self) -> None:
         from widgets.url_dialog import UrlDialog

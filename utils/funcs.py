@@ -5,10 +5,11 @@
 
 from ipaddress import IPv4Address
 from queue import Queue
-from typing import Callable, MutableSequence, TYPE_CHECKING
+from typing import Callable, Literal, MutableSequence, TYPE_CHECKING
 
-from db import DnsInfo, DnsServer, IDatabase
+from db import DnsServer, IDatabase
 from ntwrk import InterfaceAttrs
+from utils.types import DnsInfo
 
 
 if TYPE_CHECKING:
@@ -50,14 +51,14 @@ def readDnsInfo(
         q: Queue[str] | None,
         inter_name: str,
         mp_ip_dns: dict[frozenset[IPv4Address], DnsServer],
-        ) -> DnsInfo | DnsServer:
+        ) -> DnsInfo | Literal['DHCP']:
     from ntwrk import readDnsInfo
     if q:
         q.put(_('READING_DNS_INFO'))
-    return readDnsInfo(inter_name, mp_ip_dns,)
+    return readDnsInfo(inter_name)
 
 
-def setDns(q: Queue | None, inter_name: str, dns: DnsServer) -> None:
+def setDns(q: Queue | None, dns: DnsServer) -> None:
     from ntwrk import setDns
     if q:
         q.put(_('SETTING_DNS').format(inter_name, dns.name))
@@ -70,3 +71,8 @@ def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
     """
     return {dns.primary} if dns.secondary is None else \
         {dns.primary, dns.secondary}
+
+
+def ipToStr(ip: IPv4Address | None) -> str:
+    """Converts an optional IPv4 object to string."""
+    return '' if ip is None else str(ip)

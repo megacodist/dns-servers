@@ -5,43 +5,24 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from ipaddress import IPv4Address
-from math import e
-from typing import MutableSequence
-
-
-class DnsInfo:
-    """This class is used when DNS servers information is not possible
-    via `DnsServer`.
-    """
-    def __init__(
-            self,
-            name: str = '',
-            primary: str = '',
-            secondary: str = '',
-            ) -> None:
-        self.name = name
-        self.primary = primary
-        self.secondary = secondary
-    
-    def __repr__(self) -> str:
-        return (f'<{self.__class__.__qualname__} name={self.name} '
-            f'primary={self.primary} secondary={self.secondary}>')
 
 
 class DnsServer:
     @classmethod
     def primSeconToSet(
             cls,
-            primary: IPv4Address,
+            primary: IPv4Address | None,
             secondary: IPv4Address | None,
             ) -> frozenset[IPv4Address]:
         """Converts the combination of primary and secondary IPs to a
         `frozenset[IPv4Address]` object.
         """
+        set_ = set[IPv4Address]()
+        if primary:
+            set_.add(primary)
         if secondary:
-            return frozenset([primary, secondary,])
-        else:
-            return frozenset([primary,])
+            set_.add(secondary)
+        return frozenset(set_)
 
     def __init__(
             self,
