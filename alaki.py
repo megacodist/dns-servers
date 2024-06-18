@@ -5,17 +5,23 @@
 
 
 def main() -> None:
-    import subprocess
-    from ntwrk import readDnsInfo
-    primary = '10.202.10.10'
-    secondary = '10.202.10.11'
-    interName = 'Wi-Fi'
-    primary_command = f'netsh interface ip set dns "{interName}" static {primary}'
-    res = subprocess.run(primary_command, shell=True, check=True, text=True)
-    print(res.stdout)
-    print('=' * 30)
-    print(res.stderr)
-    print(readDnsInfo(interName, {}))
+    from urllib.parse import urlparse, urlunparse
+    try:
+        while True:
+            sUrl = input('Enter a URL: ')
+            urlObj = urlparse(sUrl if '://' in sUrl else 'https://' + sUrl)
+            print('URL parts ======================')
+            print('Scheme:', urlObj.scheme)
+            print('Username:', urlObj.username)
+            print('Password:', urlObj.password)
+            print('Host:', urlObj.hostname)
+            print('Port:', urlObj.port)
+            print('Path:', urlObj.path)
+            print('Params:', urlObj.params)
+            print('Fragment:', urlObj.fragment)
+            print(urlunparse(urlObj))
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == '__main__':

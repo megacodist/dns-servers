@@ -13,7 +13,7 @@ class InterfaceView(tk.Frame):
     def __init__(
             self,
             master: tk.Misc,
-            selection_cb: Callable[[int], None] | None = None,
+            selection_cb: Callable[[int | None], None] | None = None,
             **kwargs,
             ) -> None:
         super().__init__(master, **kwargs)
@@ -53,10 +53,13 @@ class InterfaceView(tk.Frame):
             row=1,
             sticky=tk.EW)
     
-    def _onSelection(self, event: tk.Event) -> None:
+    def _onSelection(self, _: tk.Event) -> None:
         selection = self._lstbx.curselection()
         if self._cbSelection:
-            self._cbSelection(selection[0])
+            try:
+                self._cbSelection(selection[0])
+            except IndexError:
+                self._cbSelection(None)
     
     def _getItemColor(self, item: InterfaceAttrs) -> str:
         from ntwrk import canConnect
@@ -74,6 +77,9 @@ class InterfaceView(tk.Frame):
     def clear(self) -> None:
         self._lstbx.delete(0, tk.END)
     
-    def getSelectedIdx(self) -> int:
+    def getSelectedIdx(self) -> int | None:
         """Gets the index of selected interface."""
-        return self._lstbx.curselection()
+        try:
+            return self._lstbx.curselection()[0]
+        except IndexError:
+            return None

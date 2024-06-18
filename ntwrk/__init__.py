@@ -5,7 +5,6 @@
 from ipaddress import AddressValueError
 import logging
 from collections import namedtuple
-from multiprocessing import Value
 import re
 from typing import Literal, MutableSequence
 
@@ -266,8 +265,10 @@ def setDns(
     3. `subprocess.CalledProcessError`
     """
     import subprocess
-    PRIM_CMD = 'netsh interface ip set dns "{}" static {}'
-    SECON_CND = 'netsh interface ip add address name="{}" {}'
+    #PRIM_CMD = 'netsh interface ip set dns "{}" static {}'
+    #SECON_CND = 'netsh interface ip add address name="{}" {}'
+    PRIM_CMD = 'netsh int ipv4 set dns name="{}" static {} primary validate=no'
+    SECON_CND = 'netsh int ipv4 add dns name="{}" {} index=2 validate=no'
     ips = list[IPv4Address]()
     if primary is not None:
         if not isinstance(primary, IPv4Address):
@@ -282,7 +283,7 @@ def setDns(
     if len(ips) == 0:
         raise ValueError('both primary and secondary cannot be `None`')
     # Setting primary DNS server...
-    command = PRIM_CMD.format(inter_name, ips[0])
+    command = PRIM_CMD.format(inter_name, str(ips[0]))
     netsh = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -297,7 +298,7 @@ def setDns(
             stderr=error,)
     # Setting secondary DNS server...
     if len(ips) == 2:
-        command = SECON_CND.format(inter_name, ips[1])
+        command = SECON_CND.format(inter_name, str(ips[1]))
         netsh = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,

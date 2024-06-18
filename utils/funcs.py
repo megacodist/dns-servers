@@ -4,6 +4,7 @@
 
 
 from ipaddress import IPv4Address
+import logging
 from queue import Queue
 from typing import Callable, Literal, MutableSequence, TYPE_CHECKING
 
@@ -14,6 +15,13 @@ from utils.types import DnsInfo
 
 if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
+
+
+class OpFailedError(Exception):
+    """APIs of this module might raise this exception if their designated
+    operation failed.
+    """
+    pass
 
 
 def mergeMsgs(braced: str, embed: str) -> str:
@@ -58,11 +66,30 @@ def readDnsInfo(
     return readDnsInfo(inter_name)
 
 
-def setDns(q: Queue | None, dns: DnsServer) -> None:
-    from ntwrk import setDns
+def setDns(q: Queue | None, inter_name: str, dns: DnsServer | DnsInfo) -> None:
+    """Sets DNS servers of the specified network interface.
+
+    #### Exceptions:
+    1. `OpFailedError`
+    2. `subprocess.CalledProcessError`
+    3. `ntwrk.ParsingError`
+    """
+    from ntwrk import setDns, readDnsInfo
     if q:
-        q.put(_('SETTING_DNS').format(inter_name, dns.name))
-    setDns(inter_name, dns)
+        if isinstance(dns, DnsServer):
+            msg = _('SETTING_DNS').format(inter_name, dns.name)
+        elif isinstance(dns, DnsInfo):
+            msg = _('SETTING_DNS').format(inter_name, _('UNNAMED'))
+        q.put(msg)
+    setDns(inter_name, dns.primary, dns.secondary)
+    dnsInfo = readDnsInfo(inter_name)
+    try:
+        logging.debug(dnsInfo)
+        isEqual = dnsInfo.ipsToSet() == dns.ipsToSet() # type: ignore
+    except Exception:
+        isEqual = False
+    if not isEqual:
+        raise OpFailedError('cannot set dns as expected')
 
 
 def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:

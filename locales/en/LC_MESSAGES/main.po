@@ -59,6 +59,9 @@ msgstr "Cancel"
 msgid "ERRORS"
 msgstr "Errors"
 
+msgid "UNNAMED"
+msgstr "unnamed"
+
 msgid "DNS_SERVERS"
 msgstr "DNS servers"
 
@@ -121,6 +124,9 @@ msgstr "Enter a DNS server"
 
 msgid "SELECT_ITEM_DNS_VIEW"
 msgstr "Select an item in the DNS servers."
+
+msgid "SELECT_ITEM_INTER_VIEW"
+msgstr "Select an item in the Interfaces list."
 
 msgid "IPS_EXIST"
 msgstr "These IPv4 exist in '{}' DNS server."

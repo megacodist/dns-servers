@@ -358,9 +358,11 @@ class DnsWin(tk.Tk):
         self._readInterfaces()
         self._readDnses()
     
-    def _readDnsInfo(self, idx: int) -> None:
+    def _readDnsInfo(self, idx: int | None) -> None:
         from utils.funcs import readDnsInfo
         self._clearDnsInfoPanel()
+        if idx is None:
+            return
         interName = self._interfaces[idx]['Name']
         self._lfrm_dnsInfo.config(text=interName) # type: ignore
         self._asyncMngr.InitiateOp(
@@ -433,20 +435,38 @@ class DnsWin(tk.Tk):
                 type_=MessageType.INFO)
     
     def _applyDns(self) -> None:
-        from utils.funcs import setDns
+        # Getting interface...
         interIdx = self._intervw.getSelectedIdx()
         if interIdx is None:
+            self._msgvw.AddMessage(
+                _('SELECT_ITEM_INTER_VIEW'),
+                type_=MessageType.WARNING)
+            return
+        interName: str = self._interfaces[interIdx]['Name'] # type: ignore
+        # Getting DNS...
+        dnsName = self._dnsvw.getSetectedName()
+        if dnsName is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
-        interName: str = self._interfaces[interIdx]['Name'] # type: ignore
+        #
+        from utils.funcs import setDns
         self._asyncMngr.InitiateOp(
             start_cb=setDns,
-            start_args=(interName, ))
+            start_args=(interName, self._mpNameDns[dnsName]),
+            finish_cb=self._onDnsApplied,
+            widgets=(self._lfrm_dnsInfo,))
 
-    def _onDnsApplied(self) -> None:
-        pass
+    def _onDnsApplied(self, fut: Future[None]) -> None:
+        try:
+            fut.result()
+        except CancelledError:
+            self._msgvw.AddMessage(
+                _('X_CANCELED').format(_('SETTING_DNS')),
+                type_=MessageType.INFO)
+        else:
+            self._readDnsInfo(self._intervw.getSelectedIdx())
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
