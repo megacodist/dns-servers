@@ -179,3 +179,6 @@ class Dnsview(tk.Frame):
     def changeDns(self, old_name: str, new_dns: DnsServer) -> None:
         iid = self._mpNameIid[old_name]
         self._trvw.item(iid, values=self._dnsToValues(new_dns))
+        self._mpIidName[iid] = new_dns.name
+        del self._mpNameIid[old_name]
+        self._mpNameIid[new_dns.name] = iid

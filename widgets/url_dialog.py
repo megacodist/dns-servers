@@ -7,6 +7,7 @@ from threading import Thread
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, TYPE_CHECKING
+from urllib.parse import ParseResult
 
 from db import DnsServer
 from utils.types import TkImg
@@ -60,6 +61,9 @@ class UrlDialog(tk.Toplevel):
         self._NAME_COL_IDX = 1
         self._RES_COL_IDX = 2
         self._DELAY_COL_IDX = 3
+        self._validColor = 'green'
+        self._invalidColor = '#ca482e'
+        self._urlParts: ParseResult | None = None
         # Initializing the GUI...
         self._initGui()
         self._populateDnses()
@@ -95,12 +99,15 @@ class UrlDialog(tk.Toplevel):
         self._frm_url.pack(side=tk.TOP, fill=tk.X, expand=True)
         #
         self._lbl_url = ttk.Label(self._frm_url, text=(_('URL') + ':'))
+        self._lbl_url.config(foreground=self._invalidColor)
         self._lbl_url.pack(side=tk.LEFT, padx=2, pady=2)
         #
         self._svar_url = tk.StringVar(self)
         self._entry_url = ttk.Entry(
             self._frm_url,
-            textvariable=self._svar_url)
+            textvariable=self._svar_url,
+            validate='key',
+            validatecommand=(self.register(self._validateUrl), '%P'))
         self._entry_url.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         #
         self._frm_dnses = ttk.Frame(self._frm_container)
@@ -189,14 +196,26 @@ class UrlDialog(tk.Toplevel):
                 values=(self._mpNameDns[name].name, '', ''))
             self._mpIidName[iid] = name
     
+    def _validateUrl(self, url: str) -> None:
+        from utils.funcs import parseUrl
+        url = url.strip()
+        try:
+            self._urlParts = parseUrl(url, scheme='https')
+            self._lbl_url.config(foreground=self._validColor)
+        except TypeError as err:
+            print(err)
+            self._urlParts = None
+            self._lbl_url.config(foreground=self._invalidColor)
+    
     def _start(self) -> None:
-        from urllib.parse import urlparse, urlunparse
+        from tkinter.messagebox import showerror
+        from urllib.parse import urlunparse
+        if not self._urlParts:
+            showerror()
+            return
         self._btn_startOk.config(text=_('OK'))
         self._btn_startOk.config(state=tk.DISABLED)
-        self._svar_url.set(urlunparse(
-            urlparse(
-                self._svar_url.get(),
-                scheme='https')))
+        self._svar_url.set(urlunparse(self._svar_url.get()))
         self._entry_url.config(state=tk.DISABLED)
     
     def showDialog(self) -> None:

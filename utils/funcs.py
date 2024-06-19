@@ -6,7 +6,8 @@
 from ipaddress import IPv4Address
 import logging
 from queue import Queue
-from typing import Callable, Literal, MutableSequence, TYPE_CHECKING
+from typing import Callable, Literal, TYPE_CHECKING
+from urllib.parse import ParseResult
 
 from db import DnsServer, IDatabase
 from ntwrk import InterfaceAttrs
@@ -103,3 +104,53 @@ def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
 def ipToStr(ip: IPv4Address | None) -> str:
     """Converts an optional IPv4 object to string."""
     return '' if ip is None else str(ip)
+
+
+def parseUrl(url: str, scheme: str = '') -> ParseResult:
+    """Parses a string containing URL and returns result. It raises
+    `TypeError` if it fails.
+    """
+    import re
+    from urllib.parse import urlparse
+    NET_LOC_REGEX = r"""
+        (?:(?P<username>\w+):(?P<password>\w+)@)?
+        (?P<hostname>\w+(?:[.]\w+)+)(?:[:](?P<port>\d+))?
+    """
+    netLocPat = re.compile(NET_LOC_REGEX, re.VERBOSE)
+    mtch = netLocPat.search(url)
+    if not mtch:
+        raise TypeError('cannot match network location')
+    netloc = mtch.group()
+    scheme_ = url[:mtch.start()]
+    pathParamsFrag = url[mtch.end():]
+    if scheme_:
+        SCHEME_REGEX = r"^(?P<scheme>\w+)?:?/*$"
+        schemePat = re.compile(SCHEME_REGEX, re.VERBOSE)
+        mtch = schemePat.match(scheme_)
+        if not mtch:
+            raise TypeError(f'cannot match scheme: {scheme_}')
+        scheme = mtch.group('scheme')
+    if pathParamsFrag:
+        PATH_PAR_FRAG_REGEX = r"""
+            ^
+            (?P<path>(?:/\w+)+)?
+            (?:[?](?P<params>\w+=\w+(?:&\w+=\w+)*))?
+            (?:[#](?P<fragment>\w+))?
+            $
+        """
+        pathParFragPat = re.compile(PATH_PAR_FRAG_REGEX, re.VERBOSE)
+        mtch = pathParFragPat.match(pathParamsFrag)
+        if not mtch:
+            raise TypeError('cannot match path, params, and/or '
+                f'fragment: {pathParamsFrag}')
+        path = mtch.group('path')
+    else:
+        path = ''
+    temp = urlparse(url)
+    return ParseResult(
+        scheme=scheme,
+        netloc=netloc,
+        path=path,
+        params=temp.params,
+        query=temp.query,
+        fragment=temp.fragment)
