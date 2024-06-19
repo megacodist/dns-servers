@@ -3,6 +3,7 @@
 #
 
 from ipaddress import AddressValueError, IPv4Address
+from queue import Empty, Queue
 from threading import Thread
 import tkinter as tk
 from tkinter import ttk
@@ -10,7 +11,7 @@ from typing import Callable, TYPE_CHECKING
 from urllib.parse import ParseResult
 
 from db import DnsServer
-from utils.types import TkImg
+from utils.types import GifImage, TkImg
 
 if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
@@ -27,7 +28,12 @@ class _HttpRes:
 
 
 class DnsTesterThrd(Thread):
-    def __init__(self) -> None:
+    def __init__(
+            self,
+            url: str,
+            inq: Queue[DnsServer],
+            outq: Queue[str | _HttpRes],
+            ) -> None:
         super().__init__(
             group=None,
             target=None,
@@ -35,6 +41,12 @@ class DnsTesterThrd(Thread):
             args=tuple(),
             kwargs=None,
             daemon=False)
+        self._url = url
+        self._inq = inq
+        self._outq = outq
+    
+    def run(self) -> None:
+        return super().run()
 
 
 class UrlDialog(tk.Toplevel):
@@ -45,6 +57,7 @@ class UrlDialog(tk.Toplevel):
             tick_img: TkImg,
             cross_img: TkImg,
             arrow_img: TkImg,
+            wait_gif: GifImage,
             ) -> None:
         super().__init__(master)
         self.title(_('TEST_URL'))
@@ -58,12 +71,18 @@ class UrlDialog(tk.Toplevel):
         self._IMG_TICK = tick_img
         self._IMG_CROSS = cross_img
         self._IMG_ARROW = arrow_img
+        self._GIF_DWAIT = wait_gif
         self._NAME_COL_IDX = 1
         self._RES_COL_IDX = 2
         self._DELAY_COL_IDX = 3
+        self._TIMINT_AFTER = 40
+        self._afterId: str | None = None
         self._validColor = 'green'
         self._invalidColor = '#ca482e'
         self._urlParts: ParseResult | None = None
+        self._dnsTester: DnsTesterThrd
+        self._outq = Queue[DnsServer]()
+        self._inq = Queue[str | _HttpRes]()
         # Initializing the GUI...
         self._initGui()
         self._populateDnses()
@@ -196,7 +215,7 @@ class UrlDialog(tk.Toplevel):
                 values=(self._mpNameDns[name].name, '', ''))
             self._mpIidName[iid] = name
     
-    def _validateUrl(self, url: str) -> None:
+    def _validateUrl(self, url: str) -> bool:
         from utils.funcs import parseUrl
         url = url.strip()
         try:
@@ -206,17 +225,33 @@ class UrlDialog(tk.Toplevel):
             print(err)
             self._urlParts = None
             self._lbl_url.config(foreground=self._invalidColor)
+        return True
     
     def _start(self) -> None:
         from tkinter.messagebox import showerror
         from urllib.parse import urlunparse
+        # Checking validity of URL...
         if not self._urlParts:
             showerror()
             return
+        #
         self._btn_startOk.config(text=_('OK'))
         self._btn_startOk.config(state=tk.DISABLED)
-        self._svar_url.set(urlunparse(self._svar_url.get()))
+        self._svar_url.set(urlunparse(self._urlParts))
         self._entry_url.config(state=tk.DISABLED)
+        #
+        self._dnsTester = DnsTesterThrd(
+            self._svar_url.get(),
+            self._outq,
+            self._inq)
+        self._dnsTester.start()
+        self._afterId = self.after(self._TIMINT_AFTER, self._processDnses, 0)
+    
+    def _processDnses(self, idx: int) -> None:
+        try:
+            res = self._inq.get_nowait()
+        except Empty:
+            self._mp
     
     def showDialog(self) -> None:
         """Shows the dialog box and returns a `DnsServer` on completion

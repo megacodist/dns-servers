@@ -56,6 +56,7 @@ class DnsWin(tk.Tk):
         self._mpIpDns: dict[frozenset[IPv4Address], DnsServer]
         # Images...
         self._GIF_WAIT: GifImage
+        self._GIF_DWAIT: GifImage
         self._HIMG_CLOSE: PIL.Image.Image
         self._HIMG_ADD: PIL.Image.Image
         self._HIMG_REMOVE: PIL.Image.Image
@@ -88,6 +89,8 @@ class DnsWin(tk.Tk):
     def _loadRes(self) -> None:
         # Loading `wait.gif`...
         self._GIF_WAIT = GifImage(self._RES_DIR / 'wait.gif')
+        # Loading `dwait.gif`...
+        self._GIF_DWAIT = GifImage(self._RES_DIR / 'dwait.gif', (16, 16,))
         # Loading `close.png`...
         self._HIMG_CLOSE = PIL.Image.open(self._RES_DIR / 'close.png')
         self._HIMG_CLOSE = self._HIMG_CLOSE.resize(size=(16, 16,))
@@ -311,6 +314,7 @@ class DnsWin(tk.Tk):
     def _onWinClosing(self) -> None:
         # Releasing images...
         self._GIF_WAIT.close()
+        self._GIF_DWAIT.close()
         self._HIMG_CLOSE.close()
         self._HIMG_ADD.close()
         self._HIMG_REMOVE.close()
@@ -571,7 +575,8 @@ class DnsWin(tk.Tk):
             self._mpNameDns,
             self._IMG_GTICK,
             self._IMG_REDX,
-            self._IMG_ARROW)
+            self._IMG_ARROW,
+            self._GIF_DWAIT)
         dns = dnsDialog.showDialog()
         if dns is None:
             return

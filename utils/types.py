@@ -49,7 +49,15 @@ class GifImage:
     GIF frames. The objects of this class support zero-based integer
     subscript notation for reading, not setting, GIF frames.
     """
-    def __init__(self, gif: PathLike) -> None:
+    def __init__(
+            self,
+            gif: PathLike,
+            size: tuple[int, int] | None = None,
+            ) -> None:
+        """Initializes an instance of this type. Arguments are as follow:
+        * `gif`: the path to the GIF file
+        * `size`: the 2-tuple that the loaded GIF file must be converted to
+        """
         from os import fspath
         from PIL import ImageSequence
         self._frames: list[TkImg] = []
@@ -59,6 +67,8 @@ class GifImage:
         self._HGIF_WAIT = PIL.Image.open(fspath(gif))
         for frame in ImageSequence.Iterator(self._HGIF_WAIT):
             frame = frame.convert("RGBA")
+            if size:
+                frame = frame.resize(size, PIL.Image.Resampling.LANCZOS)
             self._frames.append(PIL.ImageTk.PhotoImage(frame))
     
     def nextFrame(self) -> TkImg:
