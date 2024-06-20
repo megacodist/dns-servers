@@ -14,6 +14,11 @@ if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
 
 
+BAD_DNS_NAMES = ['arp', 'bgp', 'cifs', 'dhcp', 'firewall', 'ftp', 'gateway',
+    'http', 'https', 'icmp', 'imap', 'ip', 'ldap', 'mac', 'nat', 'ntp',
+    'ospf', 'pop3', 'rdp', 'router', 'smb', 'smtp', 'snmp', 'ssh', 'ssl',
+    'subnet', 'switch', 'tcp', 'telnet', 'tls', 'udp', 'vlan', 'vnc', 'vpn']
+
 
 class DnsDialog(tk.Toplevel):
     def __init__(
@@ -202,6 +207,11 @@ class DnsDialog(tk.Toplevel):
         if not text:
             # Reporting empty name error...
             self._errName = _('EMPTY_DNS_NAME')
+            self._lbl_name.config(foreground=self._invalidColor)
+            self._btn_ok.config(state=tk.DISABLED)
+        elif text.lower() in BAD_DNS_NAMES:
+            # Reporting bad DNS name error...
+            self._errName = _('BAD_DNS_NAME').format(text)
             self._lbl_name.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
         elif text in self._mpNameDns:

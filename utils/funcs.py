@@ -59,7 +59,6 @@ def listDnses(
 def readDnsInfo(
         q: Queue[str] | None,
         inter_name: str,
-        mp_ip_dns: dict[frozenset[IPv4Address], DnsServer],
         ) -> DnsInfo | Literal['DHCP']:
     from ntwrk import readDnsInfo
     if q:

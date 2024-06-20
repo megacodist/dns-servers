@@ -95,6 +95,18 @@ msgstr "Creating app window..."
 msgid "TEST_URL"
 msgstr "Test a URL"
 
+msgid "INVALID_URL"
+msgstr "URL is invalid."
+
+msgid "NO_DNS_TO_TEST"
+msgstr "No URL to test the URL."
+
+msgid "UNABLE_SET_DNS"
+msgstr "Cannot set DNS servers to '{}'"
+
+msgid "BAD_DNS_NAME"
+msgstr "{} is a bad DNS name."
+
 msgid "X_CANCELED"
 msgstr "{} was canceled"
 

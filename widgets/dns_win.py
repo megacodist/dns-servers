@@ -438,15 +438,23 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
     
-    def _applyDns(self) -> None:
-        # Getting interface...
+    def _getNetInt(self) -> str | None:
+        """Gets the selected network interface name. If nothing is
+        selected, it informs the user and returns `None`.
+        """
         interIdx = self._intervw.getSelectedIdx()
         if interIdx is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_INTER_VIEW'),
                 type_=MessageType.WARNING)
             return
-        interName: str = self._interfaces[interIdx]['Name'] # type: ignore
+        return self._interfaces[interIdx]['Name'] # type: ignore
+    
+    def _applyDns(self) -> None:
+        # Getting interface...
+        interName = self._getNetInt()
+        if interName is None:
+            return
         # Getting DNS...
         dnsName = self._dnsvw.getSetectedName()
         if dnsName is None:
@@ -569,9 +577,15 @@ class DnsWin(tk.Tk):
             logging.error('E3', dns)
     
     def _testUrl(self) -> None:
+        # Reading network interface name...
+        netIntName = self._getNetInt()
+        if netIntName is None:
+            return
+        #
         from widgets.url_dialog import UrlDialog
         dnsDialog = UrlDialog(
             self,
+            netIntName,
             self._mpNameDns,
             self._IMG_GTICK,
             self._IMG_REDX,
