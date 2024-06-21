@@ -265,8 +265,6 @@ def setDns(
     3. `subprocess.CalledProcessError`
     """
     import subprocess
-    #PRIM_CMD = 'netsh interface ip set dns "{}" static {}'
-    #SECON_CND = 'netsh interface ip add address name="{}" {}'
     PRIM_CMD = 'netsh int ipv4 set dns name="{}" static {} primary validate=no'
     SECON_CND = 'netsh int ipv4 add dns name="{}" {} index=2 validate=no'
     ips = list[IPv4Address]()
@@ -311,3 +309,26 @@ def setDns(
                 cmd=command,
                 output=error,
                 stderr=error,)
+
+
+def setDnsDhcp(net_int: str) -> None:
+    """Sets the DNS servers of the provided network interface to DHCP.
+
+    #### Exceptions:
+    1. `subprocess.CalledProcessError`
+    """
+    import subprocess
+    # Setting DNS servers to DHCP...
+    command = f'netsh interface ip set dns "{net_int}" source=dhcp'
+    netsh = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True)
+    _, error = netsh.communicate()
+    if error:
+        raise subprocess.CalledProcessError(
+            returncode=netsh.returncode,
+            cmd=command,
+            output=error,
+            stderr=error,)

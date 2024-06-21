@@ -44,8 +44,8 @@ msgstr "Secondary"
 msgid "RESPONSE"
 msgstr "Response"
 
-msgid "LATENCY"
-msgstr "Latency"
+msgid "LATENCY_HEAD"
+msgstr "Latency (seconds)"
 
 msgid "START"
 msgstr "Start"
@@ -91,6 +91,9 @@ msgstr "Invalid settings file, using defaults"
 
 msgid "CREATING_WIN"
 msgstr "Creating app window..."
+
+msgid "ACCESSING_URL"
+msgstr "Accessing the URL"
 
 msgid "TEST_URL"
 msgstr "Test a URL"

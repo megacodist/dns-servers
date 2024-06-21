@@ -371,7 +371,7 @@ class DnsWin(tk.Tk):
         self._lfrm_dnsInfo.config(text=interName) # type: ignore
         self._asyncMngr.InitiateOp(
             start_cb=readDnsInfo,
-            start_args=(interName, self._mpIpDns),
+            start_args=(interName,),
             finish_cb=self._onDnsInfoRead,
             widgets=(self._lfrm_dnsInfo,))
     

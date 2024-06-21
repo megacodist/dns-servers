@@ -66,30 +66,43 @@ def readDnsInfo(
     return readDnsInfo(inter_name)
 
 
-def setDns(q: Queue | None, inter_name: str, dns: DnsServer | DnsInfo) -> None:
+def setDns(
+        q: Queue | None,
+        net_int: str,
+        dns: DnsServer | DnsInfo | Literal['DHCP'],
+        ) -> None:
     """Sets DNS servers of the specified network interface.
 
     #### Exceptions:
-    1. `OpFailedError`
-    2. `subprocess.CalledProcessError`
-    3. `ntwrk.ParsingError`
+    1. `TypeError`
+    2. `OpFailedError`
+    3. `subprocess.CalledProcessError`
+    4. `ntwrk.ParsingError`
     """
-    from ntwrk import setDns, readDnsInfo
+    from ntwrk import setDns, setDnsDhcp, readDnsInfo
     if q:
-        if isinstance(dns, DnsServer):
-            msg = _('SETTING_DNS').format(inter_name, dns.name)
-        elif isinstance(dns, DnsInfo):
-            msg = _('SETTING_DNS').format(inter_name, _('UNNAMED'))
-        q.put(msg)
-    setDns(inter_name, dns.primary, dns.secondary)
-    dnsInfo = readDnsInfo(inter_name)
+        try:
+            dnsName = dns.name # type: ignore
+        except AttributeError:
+            dnsName = dns if isinstance(dns, str) else _('UNNAMED')
+        q.put(_('SETTING_DNS').format(net_int, dnsName))
+    # Setting DNS servers to DHCP if requested...
+    if isinstance(dns, str):
+        if dns == 'DHCP':
+            setDnsDhcp(net_int)
+            if not (readDnsInfo(net_int) is 'DCHP'):
+                raise OpFailedError('cannot set DNS servers to DHCP')
+            return
+        raise TypeError(f'only DHCP is allowed not {dns}')
+    # Setting DNS servers to provided IPs...
+    setDns(net_int, dns.primary, dns.secondary)
+    dnsInfo = readDnsInfo(net_int)
     try:
-        logging.debug(dnsInfo)
         isEqual = dnsInfo.ipsToSet() == dns.ipsToSet() # type: ignore
     except Exception:
         isEqual = False
     if not isEqual:
-        raise OpFailedError('cannot set dns as expected')
+        raise OpFailedError('cannot set DNS servers as expected')
 
 
 def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
@@ -153,3 +166,42 @@ def parseUrl(url: str, scheme: str = '') -> ParseResult:
         params=temp.params,
         query=temp.query,
         fragment=temp.fragment)
+
+
+def floatToEngineering(num: float, precision=3) -> str:
+    """Converts a float number to its engineering representation. It raises
+    `ValueError` if prefix is smaller or larger that support.
+    """
+    from decimal import Decimal
+    # Defining scientific prefixes and their corresponding powers of 10
+    prefixes = {
+        24: 'yotta',
+        21: 'zetta',
+        18: 'exa',
+        15: 'peta',
+        12: 'tera',
+        9: 'giga',
+        6: 'mega',
+        3: 'kilo',
+        0: '',
+        -3: 'milli',
+        -6: 'micro',
+        -9: 'nano',
+        -12: 'pico',
+        -15: 'femto',
+        -18: 'atto',
+        -21: 'zepto',
+        -24: 'yocto',}
+    # Converting the number to a string in scientific notation
+    sciNotation = f"{num:.2e}"
+    # Spliting the scientific notation into the coefficient and the exponent
+    coeff, exponent = sciNotation.split('e')
+    exponent = int(exponent)
+    #
+    a = exponent % 3
+    try:
+        prefix = prefixes[exponent - a]
+    except KeyError:
+        raise ValueError(f'no prefix for {exponent - a}')
+    n = Decimal(coeff) * (10 ** a)
+    return f'{float(n)} {prefix}'
