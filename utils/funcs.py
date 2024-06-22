@@ -168,30 +168,37 @@ def parseUrl(url: str, scheme: str = '') -> ParseResult:
         fragment=temp.fragment)
 
 
-def floatToEngineering(num: float, precision=3) -> str:
+def floatToEngineering(num: float, short: bool = False) -> str:
     """Converts a float number to its engineering representation. It raises
     `ValueError` if prefix is smaller or larger that support.
     """
     from decimal import Decimal
+    if short is True:
+        idx = 0
+    elif short is False:
+        idx = 1
+    else:
+        raise TypeError("expected bool for 'short' but got "
+            f"'{short.__class__.__qualname__}'")
     # Defining scientific prefixes and their corresponding powers of 10
-    prefixes = {
-        24: 'yotta',
-        21: 'zetta',
-        18: 'exa',
-        15: 'peta',
-        12: 'tera',
-        9: 'giga',
-        6: 'mega',
-        3: 'kilo',
-        0: '',
-        -3: 'milli',
-        -6: 'micro',
-        -9: 'nano',
-        -12: 'pico',
-        -15: 'femto',
-        -18: 'atto',
-        -21: 'zepto',
-        -24: 'yocto',}
+    prefixes: dict[int, tuple[str, str]] = {
+        24: ('Y', 'yotta'),
+        21: ('Z', 'zetta'),
+        18: ('E', 'exa'),
+        15: ('P', 'peta'),
+        12: ('T', 'tera'),
+        9: ('G', 'giga'),
+        6: ('M', 'mega'),
+        3: ('k', 'kilo'),
+        0: ('', ''),
+        -3: ('m', 'milli'),
+        -6: ('μ', 'micro'),
+        -9: ('n', 'nano'),
+        -12: ('p', 'pico'),
+        -15: ('f', 'femto'),
+        -18: ('a', 'atto'),
+        -21: ('z', 'zepto'),
+        -24: ('y', 'yocto'),}
     # Converting the number to a string in scientific notation
     sciNotation = f"{num:.2e}"
     # Spliting the scientific notation into the coefficient and the exponent
@@ -200,7 +207,7 @@ def floatToEngineering(num: float, precision=3) -> str:
     #
     a = exponent % 3
     try:
-        prefix = prefixes[exponent - a]
+        prefix = prefixes[exponent - a][idx]
     except KeyError:
         raise ValueError(f'no prefix for {exponent - a}')
     n = Decimal(coeff) * (10 ** a)

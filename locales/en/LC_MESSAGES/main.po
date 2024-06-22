@@ -45,7 +45,7 @@ msgid "RESPONSE"
 msgstr "Response"
 
 msgid "LATENCY_HEAD"
-msgstr "Latency (seconds)"
+msgstr "Latency"
 
 msgid "START"
 msgstr "Start"
@@ -61,6 +61,12 @@ msgstr "Errors"
 
 msgid "UNNAMED"
 msgstr "unnamed"
+
+msgid "TIMEOUT"
+msgstr "Timeout"
+
+msgid "UNKNOWN_CODE"
+msgstr "Unknown HTTP status code"
 
 msgid "DNS_SERVERS"
 msgstr "DNS servers"

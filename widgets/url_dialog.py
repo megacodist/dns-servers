@@ -2,7 +2,6 @@
 # 
 #
 
-from ipaddress import AddressValueError, IPv4Address
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
@@ -17,6 +16,14 @@ if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
 
 
+def _codeToDescr(code: int) -> str:
+    from http import HTTPStatus
+    try:
+        return HTTPStatus(code).phrase
+    except ValueError:
+        return _('Unknown Status Code')
+
+
 class _Error:
     def __init__(self, msg: str) -> None:
         self.msg = msg
@@ -25,11 +32,13 @@ class _Error:
 class _HttpRes:
     def __init__(
             self,
-            response: int = 0,
+            code: int | None = None,
             latency: float = 0.0,
+            description: str = '',
             ) -> None:
-        self.response = response
+        self.code = code
         self.latency = latency
+        self.description = description
 
 
 class DnsTesterThrd(Thread):
@@ -59,9 +68,11 @@ class DnsTesterThrd(Thread):
         """The timeout waiting for new DNS server."""
     
     def run(self) -> None:
+        import socket
         from time import sleep, monotonic
+        from urllib.error import HTTPError, URLError
+        from urllib.request import Request, urlopen
         from utils.funcs import setDns, readDnsInfo
-        import requests
         # Getting current DNS
         currDns = readDnsInfo(None, self._netIntName)
         # Starting main loop...
@@ -90,15 +101,30 @@ class DnsTesterThrd(Thread):
                 continue
             # Checking accessibility of the URL through the newly-set DNS...
             self._outq.put(_('ACCESSING_URL'))
+            response = _HttpRes()
             startTime = monotonic()
-            response = requests.head(
-                self._url,
-                allow_redirects=True,
-                timeout=2.0)
-            finishTime = monotonic()
-            self._outq.put(_HttpRes(
-                response.status_code,
-                finishTime - startTime))
+            try:
+                httpReq = Request(self._url, method='HEAD')
+                urlObj = urlopen(httpReq, timeout=5.0)
+            except HTTPError as err:
+                finishTime = monotonic()
+                response.code = err.code
+                response.description = _codeToDescr(err.code)
+            except URLError as err:
+                finishTime = monotonic()
+                # Check if the reason for the URLError is a timeout
+                if isinstance(err.reason, socket.timeout):
+                    response.description = _('TIMEOUT')
+                else:
+                    response.description = str(err)
+            else:
+                finishTime = monotonic()
+                response.code = urlObj.getcode()
+                response.description = _codeToDescr(response.code)
+                urlObj.close()
+            response.latency = finishTime - startTime
+            # Sending back the result...
+            self._outq.put(response)
         # Rolling back the DNS...
         setDns(None, self._netIntName, currDns)
     
@@ -369,16 +395,19 @@ class UrlDialog(tk.Toplevel):
             names_iter)
     
     def _updateWaitGif(self, dns_name: str) -> None:
+        self._trvw.see(self._mpNameIid[dns_name])
         self._trvw.item(
             self._mpNameIid[dns_name],
             image=self._GIF_DWAIT.nextFrame()) # type: ignore
     
     def _showDnsMsg(self, dns_name: str, msg: str) -> None:
+        self._trvw.see(self._mpNameIid[dns_name])
         self._trvw.item(
             self._mpNameIid[dns_name],
             values=(dns_name, msg, ''))
     
     def _showDnsErr(self, dns_name: str, err: _Error) -> None:
+        self._trvw.see(self._mpNameIid[dns_name])
         self._trvw.item(
             self._mpNameIid[dns_name],
             values=(dns_name, err.msg, ''))
@@ -388,16 +417,26 @@ class UrlDialog(tk.Toplevel):
     
     def _showDnsRes(self, dns_name: str, res: _HttpRes) -> None:
         from utils.funcs import floatToEngineering as flToEngin
+        self._trvw.see(self._mpNameIid[dns_name])
         self._trvw.item(
             self._mpNameIid[dns_name],
             values=(
                 dns_name,
-                self._mpNameRes[dns_name].response,
-                flToEngin(self._mpNameRes[dns_name].latency)))
-        if self._mpNameRes[dns_name].response // 100 == 2:
+                self._getDescr(dns_name),
+                flToEngin(self._mpNameRes[dns_name].latency, True) + 's'))
+        if self._mpNameRes[dns_name].code and self._mpNameRes[
+                dns_name].code // 100 == 2: # type: ignore
             self._trvw.item(self._mpNameIid[dns_name], image=self._IMG_TICK) # type: ignore
         else:
             self._trvw.item(self._mpNameIid[dns_name], image=self._IMG_CROSS) # type: ignore
+    
+    def _getDescr(self, dns_name: str) -> str:
+        code = self._mpNameRes[dns_name].code
+        descr = self._mpNameRes[dns_name].description
+        if code is not None:
+            return f'{code}: {descr}'
+        else:
+            return descr
     
     def showDialog(self) -> None:
         """Shows the dialog box and returns a `DnsServer` on completion
