@@ -2,7 +2,7 @@
 # 
 #
 
-from ipaddress import AddressValueError, IPv4Address
+from ipaddress import AddressValueError, IPv4Address, IPv6Address
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, TYPE_CHECKING
@@ -32,7 +32,7 @@ class DnsDialog(tk.Toplevel):
         self.resizable(False, False)
         self.grab_set()
         # Defning variables...
-        self._mpNameDns: dict[str, DnsServer] = mp_name_dns
+        self._mpNameDns: dict[str, DnsServer]
         """The mappin from DNS names to DNS objects: `name -> dns`"""
         self._validColor = 'green'
         self._invalidColor = '#ca482e'
@@ -40,8 +40,10 @@ class DnsDialog(tk.Toplevel):
         """The gathered DNS server information. If dialog is canceled, it
         will be `None`."""
         self._resName: str = ''
-        self._resPrim: IPv4Address | None = None
-        self._resSecon: IPv4Address | None = None
+        self._resPrim4: IPv4Address | None = None
+        self._resSecon4: IPv4Address | None = None
+        self._resPrim6: IPv6Address | None = None
+        self._resSecon6: IPv6Address | None = None
         self._errName: str = ''
         self._errPrim: str = ''
         self._errSecon: str = ''
@@ -50,6 +52,7 @@ class DnsDialog(tk.Toplevel):
             self._svarName = tk.StringVar(self, '')
             self._svarPrim = tk.StringVar(self, '')
             self._svarSecod = tk.StringVar(self, '')
+            self._mpNameDns = mp_name_dns
         elif isinstance(dns, DnsServer):
             self._svarName = tk.StringVar(self, dns.name)
             self._svarPrim = tk.StringVar(self, str(dns.primary))
@@ -105,37 +108,73 @@ class DnsDialog(tk.Toplevel):
             validatecommand=(self.register(self._validateName), '%P'))
         self._entry_name.grid(row=0, column=1, padx=2, pady=2, sticky=tk.NSEW)
         #
-        self._lbl_primary = ttk.Label(
+        self._lbl_primIpv4 = ttk.Label(
             self._frm_container,
-            text=_('primary') + ':',
+            text=_('primary') + ' IPv4:',
             foreground=self._invalidColor)
-        self._lbl_primary.grid(row=1, column=0, padx=2, pady=2, sticky=tk.E)
+        self._lbl_primIpv4.grid(row=1, column=0, padx=2, pady=2, sticky=tk.E)
         #
-        self._entry_primary = ttk.Entry(
+        self._entry_primIpv4 = ttk.Entry(
             self._frm_container,
             textvariable=self._svarPrim,
             validate='key',
             validatecommand=(self.register(self._validatePrimary), '%P'))
-        self._entry_primary.grid(
+        self._entry_primIpv4.grid(
             row=1,
             column=1,
             padx=2,
             pady=2,
             sticky=tk.NSEW)
         #
-        self._lbl_secondary = ttk.Label(
+        self._lbl_seconIpv4 = ttk.Label(
             self._frm_container,
-            text=_('SECONDARY') + ':',
+            text=_('SECONDARY') + ' IPv4:',
             foreground=self._validColor)
-        self._lbl_secondary.grid(row=2, column=0, padx=2, pady=2, sticky=tk.E)
+        self._lbl_seconIpv4.grid(row=2, column=0, padx=2, pady=2, sticky=tk.E)
         #
-        self._entry_secondary = ttk.Entry(
+        self._entry_seconIpv4 = ttk.Entry(
             self._frm_container,
             textvariable=self._svarSecod,
             validate='key',
             validatecommand=(self.register(self._validateSecond), '%P'))
-        self._entry_secondary.grid(
+        self._entry_seconIpv4.grid(
             row=2,
+            column=1,
+            padx=2,
+            pady=2,
+            sticky=tk.NSEW)
+        #
+        self._lbl_primIpv6 = ttk.Label(
+            self._frm_container,
+            text=_('primary') + ' IPv6:',
+            foreground=self._invalidColor)
+        self._lbl_primIpv6.grid(row=3, column=0, padx=2, pady=2, sticky=tk.E)
+        #
+        self._entry_primIpv6 = ttk.Entry(
+            self._frm_container,
+            textvariable=self._svarPrim,
+            validate='key',
+            validatecommand=(self.register(self._validatePrimary), '%P'))
+        self._entry_primIpv6.grid(
+            row=3,
+            column=1,
+            padx=2,
+            pady=2,
+            sticky=tk.NSEW)
+        #
+        self._lbl_seconIpv6 = ttk.Label(
+            self._frm_container,
+            text=_('SECONDARY') + ' IPv4:',
+            foreground=self._validColor)
+        self._lbl_seconIpv6.grid(row=4, column=0, padx=2, pady=2, sticky=tk.E)
+        #
+        self._entry_seconIpv6 = ttk.Entry(
+            self._frm_container,
+            textvariable=self._svarSecod,
+            validate='key',
+            validatecommand=(self.register(self._validateSecond), '%P'))
+        self._entry_seconIpv6.grid(
+            row=4,
             column=1,
             padx=2,
             pady=2,
@@ -146,7 +185,7 @@ class DnsDialog(tk.Toplevel):
             text=_('ERRORS'))
         self._lfrm_errors.rowconfigure(0, weight=1)
         self._lfrm_errors.grid(
-            row=3,
+            row=5,
             column=0,
             columnspan=2,
             padx=2,
@@ -158,7 +197,7 @@ class DnsDialog(tk.Toplevel):
             orient=tk.HORIZONTAL)
         self._txt = tk.Text(
             self._lfrm_errors,
-            height=4,
+            height=6,
             width=24,
             wrap=tk.NONE,
             state=tk.DISABLED,
@@ -175,7 +214,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._frm_btns = ttk.Frame(self._frm_container)
         self._frm_btns.grid(
-            row=4,
+            row=6,
             column=0,
             columnspan=2,
             padx=2,
@@ -238,17 +277,17 @@ class DnsDialog(tk.Toplevel):
         if self._resPrim is None:
             # Reporting invalid primary IP error...
             self._errPrim = _('INVALID_PRIM_IP')
-            self._lbl_primary.config(foreground=self._invalidColor)
+            self._lbl_primIpv4.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
         elif self._primEqualsSecon():
             # Reporting identical IPs error...
             self._errPrim = _('EQUAL_PRIM_SECON')
-            self._lbl_primary.config(foreground=self._invalidColor)
+            self._lbl_primIpv4.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
         else:
             # Reporting primary IP is OK...
             self._errPrim = ''
-            self._lbl_primary.config(foreground=self._validColor)
+            self._lbl_primIpv4.config(foreground=self._validColor)
             if not self._errorFound():
                 self._btn_ok.config(state=tk.NORMAL)
         self._updateErrorMsg()
@@ -263,17 +302,17 @@ class DnsDialog(tk.Toplevel):
         if text and (self._resSecon is None):
             # Reporting invalid secondary IP error...
             self._errSecon = _('INVALID_SECON_IP')
-            self._lbl_secondary.config(foreground=self._invalidColor)
+            self._lbl_seconIpv4.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
         elif self._primEqualsSecon():
             # Reporting identical IPs error...
             self._errSecon = _('EQUAL_PRIM_SECON')
-            self._lbl_secondary.config(foreground=self._invalidColor)
+            self._lbl_seconIpv4.config(foreground=self._invalidColor)
             self._btn_ok.config(state=tk.DISABLED)
         else:
             # Reporting secondary IP is OK...
             self._errSecon = ''
-            self._lbl_secondary.config(foreground=self._validColor)
+            self._lbl_seconIpv4.config(foreground=self._validColor)
             if not self._errorFound():
                 self._btn_ok.config(state=tk.NORMAL)
         self._updateErrorMsg()
