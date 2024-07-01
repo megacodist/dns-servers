@@ -2,69 +2,89 @@
 # 
 #
 
-import tkinter as tk
-from tkinter import ttk, messagebox
-import re
 
-def validate_ip(ip):
-    """ Validate if the string is a valid IP address. """
-    ipv4_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
-    ipv6_pattern = r'^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$'
-    if re.match(ipv4_pattern, ip) or re.match(ipv6_pattern, ip):
-        return True
-    return False
+from typing import Any
 
-def validate_input(*args):
-    """ Validate the input fields. """
-    ipv4_1 = ipv4_entry_1.get()
-    ipv4_2 = ipv4_entry_2.get()
-    ipv6_1 = ipv6_entry_1.get()
-    ipv6_2 = ipv6_entry_2.get()
 
-    ip_addresses = [ipv4_1, ipv4_2, ipv6_1, ipv6_2]
-    valid_ips = [ip for ip in ip_addresses if ip and validate_ip(ip)]
+class NetInt:
+    def __init__(
+            self,
+            index: int,
+            interface_idx: int,
+            net_conn_id: str,
+            description: str,
+            dhcp_enabled: bool,
+            dns_order: tuple[str, ...] | None,
+            default_gateway: tuple[str, ...] | None,
+            guid: str,
+            mac_addr: str,
+            ) -> None:
+        self.NetConnectionID: str = net_conn_id
+        """The name of the network interface in the shell."""
+        self.Description: str = description
+        self.DHCPEnabled: bool = dhcp_enabled
+        self.DNSServerSearchOrder: tuple[str, ...] | None = dns_order
+        self.DefaultIPGateway: tuple[str, ...] | None = default_gateway
+        self.Index = index
+        self.InterfaceIndex = interface_idx
+        self.MACAddress = mac_addr
+        self.GUID = guid
+    
+    def __repr__(self) -> str:
+        return (f"<{self.__class__.__qualname__} "
+            f"NetConnectionID={self.NetConnectionID} "
+            f"Description={self.Description} "
+            f"DHCPEnabled={self.DHCPEnabled} "
+            f"DNSServerSearchOrder={self.DNSServerSearchOrder} "
+            f"DefaultIPGateway={self.DefaultIPGateway}>")
 
-    if not valid_ips:
-        return False
-    return True
 
-# Create the main window
-root = tk.Tk()
-root.title("DNS Server Input")
-
-# Create and place the DNS server name entry
-ttk.Label(root, text="DNS Server Name:").grid(column=0, row=0, padx=10, pady=10)
-dns_entry = ttk.Entry(root)
-dns_entry.grid(column=1, row=0, padx=10, pady=10)
-
-# Create and place the IPv4 entry fields
-ttk.Label(root, text="IPv4 Address 1:").grid(column=0, row=1, padx=10, pady=10)
-ipv4_entry_1 = ttk.Entry(root, validate='key', validatecommand=(root.register(validate_input), '%P'))
-ipv4_entry_1.grid(column=1, row=1, padx=10, pady=10)
-
-ttk.Label(root, text="IPv4 Address 2:").grid(column=0, row=2, padx=10, pady=10)
-ipv4_entry_2 = ttk.Entry(root, validate='key', validatecommand=(root.register(validate_input), '%P'))
-ipv4_entry_2.grid(column=1, row=2, padx=10, pady=10)
-
-# Create and place the IPv6 entry fields
-ttk.Label(root, text="IPv6 Address 1:").grid(column=0, row=3, padx=10, pady=10)
-ipv6_entry_1 = ttk.Entry(root, validate='key', validatecommand=(root.register(validate_input), '%P'))
-ipv6_entry_1.grid(column=1, row=3, padx=10, pady=10)
-
-ttk.Label(root, text="IPv6 Address 2:").grid(column=0, row=4, padx=10, pady=10)
-ipv6_entry_2 = ttk.Entry(root, validate='key', validatecommand=(root.register(validate_input), '%P'))
-ipv6_entry_2.grid(column=1, row=4, padx=10, pady=10)
-
-# Create and place the validate button
-validate_button = ttk.Button(root, text="Validate", command=lambda: messagebox.showinfo("Validation", "Input is valid." if validate_input() else "At least one valid IP address must be provided."))
-validate_button.grid(column=0, row=5, columnspan=2, pady=20)
-
-# Start the GUI event loop
-root.mainloop()
+def enumNetInts() -> list[NetInt]:
+    """Enumerates network interfaces on this Windows platform."""
+    import win32com.client
+    from win32com.client import CDispatch
+    wmi = win32com.client.GetObject("winmgmts:")
+    # Querying network adapter configurations...
+    configQuery = """
+        SELECT
+            Index, InterfaceIndex, MACAddress, SettingID, Description,
+            DHCPEnabled, DNSServerSearchOrder, DefaultIPGateway
+        FROM
+            Win32_NetworkAdapterConfiguration"""
+    configs = wmi.ExecQuery(configQuery)
+    # Querying network adapters...
+    adaptersQuery = """
+        SELECT
+            Index, InterfaceIndex, MACAddress, GUID, Description,
+            NetConnectionID, NetEnabled
+        FROM
+            Win32_NetworkAdapter
+        WHERE
+            PhysicalAdapter=True"""
+    adapters = wmi.ExecQuery(adaptersQuery)
+    # Merging results...
+    mpIdxCfg = dict[tuple[int, int], CDispatch]()
+    missCfgs = list[CDispatch]()
+    for cfg in configs:
+        if not (isinstance(cfg.Index, int) and isinstance(
+                cfg.InterfaceIndex, int)):
+            missCfgs.append(cfg)
+            continue
+        mpIdxCfg[(cfg.Index, cfg.InterfaceIndex,)] = cfg
+    mpIdxAdap = dict[tuple[int, int], CDispatch]()
+    missAdaps = list[CDispatch]()
+    for adap in adapters:
+        if not (isinstance(adap.Index, int) and isinstance(
+                adap.InterfaceIndex, int)):
+            missAdaps.append(adap)
+            continue
+        mpIdxAdap[(adap.Index, adap.InterfaceIndex,)] = adap
+    cmnKeys = set(mpIdxCfg.keys()).intersection(mpIdxAdap.keys())
 
 
 def main() -> None:
-    setDnsDhcp('Ethernet 3')
+    from pprint import pprint
+    pprint(enumNetInts())
 
 
 if __name__ == '__main__':

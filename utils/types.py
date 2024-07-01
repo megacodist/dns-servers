@@ -5,7 +5,7 @@
 import base64
 import hashlib
 import hmac
-from ipaddress import IPv4Address
+from ipaddress import (IPv4Address as IPv4, IPv6Address as IPv6)
 import logging
 from os import PathLike
 import pickle
@@ -21,19 +21,37 @@ TkImg = PIL.ImageTk.PhotoImage
 """Tkinter compatible image type."""
 
 
+class DnsIps:
+    def __init__(self, *ips: IPv4 | IPv6) -> None:
+        stIPs4 = list[IPv4]()
+        stIPs6 = list[IPv6]()
+        for ip in ips:
+            if isinstance(ip, IPv4):
+                stIPs4.append(ip)
+            elif isinstance(ip, IPv6):
+                stIPs6.append(ip)
+            else:
+                raise TypeError("only IPv4 and IPv6 are acceptable but "
+                    f"got '{ip.__class__.__qualname__}'")
+        self.ips4 = tuple(stIPs4)
+        """IPv4 addresses of this object."""
+        self.ips6 = tuple(stIPs6)
+        """IPv6 addresses of this object."""
+
+
 class DnsInfo:
     """This class is used when DNS servers information is not possible
     via `DnsServer`.
     """
     def __init__(
             self,
-            primary: IPv4Address | None = None,
-            secondary: IPv4Address | None = None,
+            primary: IPv4 | None = None,
+            secondary: IPv4 | None = None,
             ) -> None:
         self.primary = primary
         self.secondary = secondary
     
-    def ipsToSet(self) -> frozenset[IPv4Address]:
+    def ipsToSet(self) -> frozenset[IPv4]:
         from db import DnsServer
         return DnsServer.primSeconToSet(self.primary, self.secondary)
     
