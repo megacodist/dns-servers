@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable
 
-from ntwrk import AttrValue, InterfaceAttrs, canConnect
+from ntwrk import NetInt
 
 
 class InterfaceView(tk.Frame):
@@ -61,14 +61,13 @@ class InterfaceView(tk.Frame):
             except IndexError:
                 self._cbSelection(None)
     
-    def _getItemColor(self, item: InterfaceAttrs) -> str:
-        from ntwrk import canConnect
-        if canConnect(item):
+    def _getItemColor(self, net_int: NetInt) -> str:
+        if net_int.connectivity():
             return self._canConn
         else:
             return self._noConn
 
-    def populate(self, items: Iterable[InterfaceAttrs]) -> None:
+    def populate(self, items: Iterable[NetInt]) -> None:
         self.clear()
         for item in items:
             self._lstbx.insert(tk.END, item['Name']) # type: ignore

@@ -10,7 +10,7 @@ from typing import Callable, Literal, TYPE_CHECKING
 from urllib.parse import ParseResult
 
 from db import DnsServer, IDatabase
-from ntwrk import InterfaceAttrs
+from ntwrk import NetInt
 from utils.types import DnsInfo
 
 
@@ -33,12 +33,12 @@ def mergeMsgs(braced: str, embed: str) -> str:
     return braced.format(embed)
 
 
-def listInterfaces(q: Queue[str] | None) -> list[InterfaceAttrs]:
-    """List all network interfaces. Raises `TypeError` upon any failure."""
-    from ntwrk import parse_ipconfig
+def readNetInts(q: Queue[str] | None) -> list[NetInt]:
+    """Reads all network interfaces. Raises `TypeError` upon any failure."""
+    from ntwrk import enumNetInts
     if q:
         q.put(_('READING_INTERFACES'))
-    return parse_ipconfig()
+    return enumNetInts()
 
 
 def listDnses(

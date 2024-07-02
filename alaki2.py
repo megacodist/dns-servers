@@ -332,3 +332,11 @@ def setDnsDhcp(net_int: str) -> None:
             cmd=command,
             output=error,
             stderr=error,)
+
+
+if __name__ == '__main__':
+    import re
+    _MAC_REGEX = '^[0-9A-F](?:[:][0-9A-F]){5}$'
+    _macPat = re.compile(_MAC_REGEX)
+    _mtch = _macPat.match('00:12:12:12:12:45')
+    print(_mtch)

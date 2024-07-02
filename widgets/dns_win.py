@@ -17,7 +17,7 @@ from .dns_view import Dnsview
 from .interface_view import InterfaceView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import InterfaceAttrs
+from ntwrk import NetInt
 from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
 from utils.types import DnsInfo, GifImage, TkImg
@@ -50,8 +50,8 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         self._db = db
         """The database object."""
-        self._interfaces: list[InterfaceAttrs]
-        """A `MutableSequence` of all network interfaces."""
+        self._netInts: list[NetInt]
+        """A list of all network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[frozenset[IPv4Address], DnsServer]
         # Images...
@@ -303,13 +303,42 @@ class DnsWin(tk.Tk):
             command=self._msgvw.Clear)
         self._menu_cmds.add_cascade(
             label=_('READ_INTERFACES'),
-            command=self._readInterfaces)
+            command=self._readNetInts)
         self._menu_cmds.add_cascade(
             label=_('READ_DNSES'),
             command=self._readDnses)
         self._menu_cmds.add_cascade(
             label=_('TEST_URL'),
             command=self._testUrl)
+    
+    def _initGui_2(self) -> None:
+        # Create the main PanedWindow (left and right)
+        main_panedwindow = ttk.PanedWindow(root, orient=tk.HORIZONTAL)
+        main_panedwindow.pack(fill=tk.BOTH, expand=True)
+
+        # Left pane content
+        left_frame = ttk.Frame(main_panedwindow, width=200, relief=tk.SUNKEN)
+        main_panedwindow.add(left_frame, weight=1)
+
+        # Right PanedWindow (upper and lower)
+        right_panedwindow = ttk.PanedWindow(main_panedwindow, orient=tk.VERTICAL)
+        main_panedwindow.add(right_panedwindow, weight=4)
+
+        # Upper PanedWindow (left and right)
+        upper_panedwindow = ttk.PanedWindow(right_panedwindow, orient=tk.HORIZONTAL)
+        right_panedwindow.add(upper_panedwindow, weight=3)
+
+        # Upper left pane content
+        upper_left_frame = ttk.Frame(upper_panedwindow, width=200, relief=tk.SUNKEN)
+        upper_panedwindow.add(upper_left_frame, weight=1)
+
+        # Upper right pane content
+        upper_right_frame = ttk.Frame(upper_panedwindow, width=200, relief=tk.SUNKEN)
+        upper_panedwindow.add(upper_right_frame, weight=1)
+
+        # Lower pane content
+        lower_frame = ttk.Frame(right_panedwindow, height=200, relief=tk.SUNKEN)
+        right_panedwindow.add(lower_frame, weight=1)
     
     def _onWinClosing(self) -> None:
         # Releasing images...
@@ -359,7 +388,7 @@ class DnsWin(tk.Tk):
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
-        self._readInterfaces()
+        self._readNetInts()
         self._readDnses()
     
     def _readDnsInfo(self, idx: int | None) -> None:
@@ -367,7 +396,7 @@ class DnsWin(tk.Tk):
         self._clearDnsInfoPanel()
         if idx is None:
             return
-        interName = self._interfaces[idx]['Name']
+        interName = self._netInts[idx]['Name']
         self._lfrm_dnsInfo.config(text=interName) # type: ignore
         self._asyncMngr.InitiateOp(
             start_cb=readDnsInfo,
@@ -376,8 +405,6 @@ class DnsWin(tk.Tk):
             widgets=(self._lfrm_dnsInfo,))
     
     def _onDnsInfoRead(self, fut: Future[DnsInfo | Literal['DHCP']]) -> None:
-        from subprocess import CalledProcessError
-        from ntwrk import ParsingError
         from utils.funcs import mergeMsgs
         try:
             res = fut.result()
@@ -386,37 +413,23 @@ class DnsWin(tk.Tk):
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_DNS_INFO')),
                 type_=MessageType.INFO,)
-        except (ParsingError, CalledProcessError,) as err:
-            msg = mergeMsgs(_('ERROR'), _('READING_DNS_INFO'))
-            self._msgvw.AddMessage(
-                msg,
-                type_=MessageType.ERROR)
-            logging.error('E2', err)
     
-    def _readInterfaces(self) -> None:
-        from utils.funcs import listInterfaces
+    def _readNetInts(self) -> None:
+        """Reads network interfaces."""
+        from utils.funcs import readNetInts
         self._asyncMngr.InitiateOp(
-            start_cb=listInterfaces,
-            finish_cb=self._onInterfacesRead,
+            start_cb=readNetInts,
+            finish_cb=self._onNetIntsRead,
             widgets=(self._intervw,))
     
-    def _onInterfacesRead(self, fut: Future[list[InterfaceAttrs]]) -> None:
-        from subprocess import CalledProcessError
-        from ntwrk import ParsingError
-        from utils.funcs import mergeMsgs
+    def _onNetIntsRead(self, fut: Future[list[NetInt]]) -> None:
         try:
-            self._interfaces = fut.result()
-            self._intervw.populate(self._interfaces)
+            self._netInts = fut.result()
+            self._intervw.populate(self._netInts)
         except CancelledError:
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_INTERFACES')),
                 type_=MessageType.INFO)
-        except (ParsingError, CalledProcessError,) as err:
-            msg = mergeMsgs(_('ERROR'), _('READING_INTERFACES'))
-            self._msgvw.AddMessage(
-                msg,
-                type_=MessageType.ERROR)
-            logging.error('E2', err)
     
     def _readDnses(self) -> None:
         from utils.funcs import listDnses
@@ -448,7 +461,7 @@ class DnsWin(tk.Tk):
                 _('SELECT_ITEM_INTER_VIEW'),
                 type_=MessageType.WARNING)
             return
-        return self._interfaces[interIdx]['Name'] # type: ignore
+        return self._netInts[interIdx]['Name'] # type: ignore
     
     def _applyDns(self) -> None:
         # Getting interface...
