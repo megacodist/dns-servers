@@ -29,6 +29,12 @@ msgstr "Name"
 msgid "URL"
 msgstr "URL"
 
+msgid "URLS"
+msgstr "URLs"
+
+msgid "MSGS"
+msgstr "Messages"
+
 msgid "QUIT"
 msgstr "Quit"
 

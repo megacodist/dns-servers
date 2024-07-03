@@ -2,13 +2,11 @@
 # 
 #
 
+from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 from os import PathLike
 import sqlite3
-from typing import MutableSequence
 
-from db import DnsServer
-
-from . import DnsServer, IDatabase, IPv4Address
+from . import DnsServer, IDatabase
 
 
 class SqliteDb(IDatabase):
@@ -17,21 +15,35 @@ class SqliteDb(IDatabase):
         self._conn = sqlite3.connect(db_file, check_same_thread=False)
         """The connection object of the database."""
     
-    def _tupleToDns(self, tpl: tuple[str, int, int | None]) -> DnsServer:
-        """Converts a 3-tuple into a `DnsServer` object."""
-        return  DnsServer(
-            tpl[0],
-            IPv4Address(tpl[1]),
-            None if tpl[2] is None else IPv4Address(tpl[2]))
+    def _tupleToDns(
+            self,
+            tpl: tuple[str, int | None, int | None, int | None, int | None],
+            ) -> DnsServer:
+        """Converts a 5-tuple into a `DnsServer` object."""
+        ips = list[IPv4 | IPv6]()
+        if tpl[1] is not None:
+            ips.append(IPv4(tpl[1]))
+        if tpl[2] is not None:
+            ips.append(IPv4(tpl[2]))
+        if tpl[3] is not None:
+            ips.append(IPv6(tpl[3]))
+        if tpl[4] is not None:
+            ips.append(IPv6(tpl[4]))
+        return  DnsServer(tpl[0], ips)
 
-    def _dnsToTuple(self, dns: DnsServer) -> tuple[str, int, int | None]:
-        """Converts the `DnsServer` object into a 3-tuple compatible with
+    def _dnsToTuple(
+            self,
+            dns: DnsServer,
+            ) -> tuple[str, int | None, int | None, int | None, int | None]:
+        """Converts the `DnsServer` object into a 5-tuple compatible with
         the database.
         """
         return (
             dns.name,
-            int(dns.primary),
-            int(dns.secondary) if dns.secondary else None)
+            None if dns.prim_4 is None else int(dns.prim_4),
+            None if dns.secon_4 is None else int(dns.secon_4),
+            None if dns.prim_6 is None else int(dns.prim_6),
+            None if dns.secon_6 is None else int(dns.secon_6),)
     
     def close(self) -> None:
         """Closes the database."""
@@ -40,7 +52,7 @@ class SqliteDb(IDatabase):
     def selectDns(self, dns_name: str) -> DnsServer | None:
         sql = """
             SELECT
-                name, primary_, secondary
+                name, prim_4, secon_4, prim_6, secon_6
             FROM
                 dns_servers
             WHERE
@@ -56,7 +68,7 @@ class SqliteDb(IDatabase):
     def selctAllDnses(self) -> list[DnsServer]:
         sql = """
             SELECT
-                id, name, primary_, secondary
+                id, name, prim_4, secon_4, prim_6, secon_6
             FROM
                 dns_servers
             ORDER BY
@@ -72,9 +84,9 @@ class SqliteDb(IDatabase):
     def insertDns(self, dns: DnsServer) -> None:
         sql = """
             INSERT INTO
-                dns_servers(name, primary_, secondary)
+                dns_servers(name, prim_4, secon_4, prim_6, secon_6)
             VALUES
-                (?, ?, ?);
+                (?, ?, ?, ?, ?);
         """
         cur = self._conn.cursor()
         cur = cur.execute(sql, self._dnsToTuple(dns))
@@ -103,7 +115,7 @@ class SqliteDb(IDatabase):
             UPDATE
                 dns_servers
             SET
-                name = ?, primary_ = ?, secondary = ?
+                name = ?, prim_4 = ?, secon_4 = ?, prim_6 = ?, secon_6 = ?
             WHERE
                 name = ?;
         """

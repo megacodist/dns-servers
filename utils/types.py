@@ -62,6 +62,30 @@ class DnsInfo:
             f'secondary={ipToStr(self.secondary)}>')
 
 
+class _GifIter:
+    def __init__(self, frames: list[TkImg]) -> None:
+        self._frames = frames
+        """The frames of the GIF image."""
+        self._idx = 0
+        """The index of the current frame."""
+    
+    def __next__(self) -> TkImg:
+        try:
+            frame = self._frames[self._idx]
+        except IndexError:
+            raise StopIteration
+        else:
+            self._idx += 1
+            return frame
+    
+    def nextLoop(self) -> TkImg:
+        try:
+            return self.__next__()
+        except StopIteration:
+            self._idx = 1
+            return self._frames[0]
+
+
 class GifImage:
     """It is actually a list of `PIL.ImageTk.PhotoImage` to hold the
     GIF frames. The objects of this class support zero-based integer

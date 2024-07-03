@@ -9,7 +9,7 @@ from typing import Callable, Iterable
 from ntwrk import NetInt
 
 
-class InterfaceView(tk.Frame):
+class NetIntView(tk.Frame):
     def __init__(
             self,
             master: tk.Misc,
