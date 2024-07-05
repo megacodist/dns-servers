@@ -110,6 +110,9 @@ class MAC:
 
 
 class NetInt:
+    """Encapsulates a network interface on Microsot Windows. This class
+    current supports IP-based network communication.
+    """
     def __init__(
             self,
             index: int,
@@ -123,11 +126,19 @@ class NetInt:
             default_gateway: tuple[IPv4 | IPv6, ...] | None,
             guid: UUID,
             mac_addr: MAC | None,
+            dhcp_server: IPv4 | IPv6 | None
             ) -> None:
         self.NetConnectionID = net_conn_id
-        """The name of the network interface in the shell."""
+        """The name of this network interface in the shell."""
         self.Description = description
         self.DHCPEnabled = dhcp_enabled
+        """Whether this network interface is configured to obtain obtain
+        its network configuration settings, such as IP address, subnet mask,
+        default gateway, and DNS server addresses; automatically through DHCP.
+        """
+        self.DHCPServer = dhcp_server
+        """Specifies the IP address of the DHCP server that will provide the
+        necessary network configurations."""
         self.DNSServerSearchOrder = dns_order
         self.DefaultIPGateway = default_gateway
         self.Index = index
@@ -135,6 +146,9 @@ class NetInt:
         self.MACAddress = mac_addr
         self.GUID = guid
         self.IPEnabled = ip_enabled
+        """Specifies whether this network interface can use IP protocol for
+        its network communicatiopns.
+        """
         self.IPAddress = ip_addr
     
     def __repr__(self) -> str:
@@ -153,15 +167,26 @@ class NetInt:
         """Specifies whether this network interface has the potential
         interner connectivity.
         """
-        return self.IPEnabled and bool(self.IPAddress) and \
-            bool(self.MACAddress) and bool(self.DefaultIPGateway) and (
-            self.DHCPEnabled or bool(self.DNSServerSearchOrder))
+        # Checking whether this network interface uses IP-based
+        # communication...
+        if self.IPEnabled:
+            return bool(self.IPAddress) and bool(self.MACAddress) and \
+                bool(self.DefaultIPGateway) and (self.dnsProvided() or
+                self.dhcpAccess())
+        else:
+            return False
     
-    def dhcpEnabled(self) -> bool:
-        """Specifies whether DHCP is enabled for this network interface
-        or not.
+    def dnsProvided(self) -> bool:
+        """Specifies whether this network interface is provided with DNS
+        servers or not.
         """
-        return self.DHCPEnabled
+        return bool(self.DNSServerSearchOrder)
+    
+    def dhcpAccess(self) -> bool:
+        """Specifies whether this network interface has access to DHCP
+        server.
+        """
+        return self.DHCPEnabled and bool(self.DHCPServer)
 
 
 def enumNetInts() -> list[NetInt]:
@@ -178,7 +203,7 @@ def enumNetInts() -> list[NetInt]:
         SELECT
             Index, InterfaceIndex, MACAddress, SettingID, Description,
             DHCPEnabled, DNSServerSearchOrder, DefaultIPGateway, IPEnabled,
-            IPAddress
+            IPAddress, DHCPServer
         FROM
             Win32_NetworkAdapterConfiguration"""
     configs = wmi.ExecQuery(configQuery)
@@ -237,6 +262,12 @@ def enumNetInts() -> list[NetInt]:
             logging.error('Invalid MAC address in '
                 f'{mpConfigs[key].SettingID} adapter configuration')
             continue
+        try:
+            dhcpServer = _strToIp(mpConfigs[key].DHCPServer)
+        except TypeError:
+            logging.error('Invalid DHCP server in '
+                f'{mpConfigs[key].SettingID} adapter configuration')
+            continue
         results.append(NetInt(
             mpConfigs[key].Index,
             mpConfigs[key].InterfaceIndex,
@@ -248,7 +279,8 @@ def enumNetInts() -> list[NetInt]:
             dnses,
             gateway,
             key,
-            mac))
+            mac,
+            dhcpServer))
         obj = mpConfigs[key]
         del obj
         obj = mpAdapters[key]
@@ -281,5 +313,21 @@ def _toIpList(
             continue
         except AddressValueError:
             pass
-        raise TypeError(f'expected IPv4 or IPv6 but got {ip}')
+        raise TypeError(
+            f'expected IPv4 or IPv6 but got {ip.__class__.__qualname__}')
     return tuple(res)
+
+
+def _strToIp(ip: str | None) -> IPv4 | IPv6 | None:
+    from ipaddress import AddressValueError
+    if ip is None:
+        return None
+    try:
+        return IPv4(ip)
+    except AddressValueError:
+        pass
+    try:
+        return IPv6(ip)
+    except AddressValueError:
+        raise TypeError(
+            f'expected IPv4 or IPv6 but got {ip.__class__.__qualname__}')

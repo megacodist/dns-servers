@@ -59,11 +59,10 @@ class IpsView(ttk.Frame):
     
     def populate(self, net_int: NetInt, dnses: Iterable[DnsServer]) -> None:
         self.clear()
-        if net_int.dhcpEnabled():
-            self._showDhcp()
-        else:
+        if net_int.dnsProvided():
             ips = net_int.DNSServerSearchOrder
-            if ips is None:
+            if not ips:
+                # `ips` is either `None` or empty...
                 self._showIpsRoles(tuple(), tuple())
             else:
                 res = list[tuple[str, tuple[IPRole | None, ...]]]()
@@ -71,14 +70,20 @@ class IpsView(ttk.Frame):
                     roles = [dns.getRole(ip) for ip in ips]
                     if any(roles):
                         res.append((dns.name, tuple(roles),))
+                res.sort(key=lambda x: len(x[1]))
                 self._showIpsRoles(ips, res)
+        elif net_int.dhcpAccess():
+            self._showMsg(_('NET_INT_DHCP'))
+        else:
+            self._showMsg(_('NO_DHCP_NO_DNS'))
     
-    def _showDhcp(self) -> None:
+    def _showMsg(self, text: str) -> None:
         self.clear()
         msg = tk.Message(
             self._frm,
-            text=_('NET_INT_DHCP'),
-            width=self._frm.winfo_width())
+            text=text,
+            width=self._frm.winfo_width(),)
+        self.update_idletasks()
         msg.pack(fill=tk.BOTH, expand=True)
         self._cnvs.config(scrollregion=(
             0,
@@ -93,7 +98,8 @@ class IpsView(ttk.Frame):
             ) -> None:
         self.clear()
         #
-        lbl = tk.Label(self._frm, bitmap='warning')
+        lbl = tk.Label(self._frm, bitmap='gray50')
+        lbl.grid(column=0, row=0, sticky=tk.NSEW)
         #
         for idx, ip in enumerate(ips, 1):
             lbl = ttk.Label(self._frm, text=str(ip))
@@ -104,7 +110,7 @@ class IpsView(ttk.Frame):
             lbl.grid(column=j, row=0)
             for i, role in enumerate(tpl[1], 1):
                 lbl = ttk.Label(self._frm, text=self._roleToStr(role))
-                lbl.grid(column=j, row=1)
+                lbl.grid(column=j, row=i)
         #
         self._cnvs.create_window(10, 10, anchor="nw", window=self._frm)
         self._cnvs.config(scrollregion=(

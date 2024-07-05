@@ -336,6 +336,7 @@ class DnsWin(tk.Tk):
     
     def _readDnsInfo(self, idx: int | None) -> None:
         if idx is None:
+            self._ipsvw.clear()
             return
         self._lfrm_ips.config(text=self._netInts[idx].NetConnectionID)
         self._ipsvw.populate(self._netInts[idx], self._mpNameDns.values())

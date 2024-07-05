@@ -186,4 +186,7 @@ msgid "EQUAL_PRIM_SECON"
 msgstr "The primary and secondary IPs are equal."
 
 msgid "NET_INT_DHCP"
-msgstr "This network interface uses DHCP."
+msgstr "This network resolves URLs through DHCP."
+
+msgid "NO_DHCP_NO_DNS"
+msgstr "This network interface has neither static DNS servers nor DHCP access."
