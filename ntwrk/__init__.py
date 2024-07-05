@@ -156,13 +156,22 @@ class NetInt:
         return self.IPEnabled and bool(self.IPAddress) and \
             bool(self.MACAddress) and bool(self.DefaultIPGateway) and (
             self.DHCPEnabled or bool(self.DNSServerSearchOrder))
+    
+    def dhcpEnabled(self) -> bool:
+        """Specifies whether DHCP is enabled for this network interface
+        or not.
+        """
+        return self.DHCPEnabled
 
 
 def enumNetInts() -> list[NetInt]:
     """Enumerates network interfaces on this Windows platform."""
     from uuid import UUID
+    import pythoncom
     import win32com.client
     from win32com.client import CDispatch
+    #
+    pythoncom.CoInitialize()
     wmi = win32com.client.GetObject("winmgmts:")
     # Querying network adapter configurations...
     configQuery = """
@@ -240,7 +249,14 @@ def enumNetInts() -> list[NetInt]:
             gateway,
             key,
             mac))
+        obj = mpConfigs[key]
+        del obj
+        obj = mpAdapters[key]
+        del obj
+        del mpConfigs[key]
+        del mpAdapters[key]
     #
+    pythoncom.CoUninitialize()
     return results
 
 

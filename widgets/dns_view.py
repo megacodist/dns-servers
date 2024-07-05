@@ -21,14 +21,18 @@ class Dnsview(tk.Frame):
             double_clicked_cb: Callable[[], None] | None = None,
             *,
             name_col_width: int = 100,
-            primary_col_width: int = 100,
-            secondary_col_width: int = 100,
+            prim_4_col_width: int = 100,
+            secon_4_col_width: int = 100,
+            prim_6_col_width: int = 100,
+            secon_6_col_width: int = 100,
             **kwargs
             ) -> None:
         super().__init__(master, **kwargs)
         self._NAME_COL_IDX = 0
-        self._PRIM_COL_IDX = 1
-        self._SECON_COL_IDX = 2
+        self._PRIM_4_COL_IDX = 1
+        self._SECON_4_COL_IDX = 2
+        self._PRIM_6_COL_IDX = 3
+        self._SECON_6_COL_IDX = 4
         self._cbDoubleClicked = double_clicked_cb
         """The callback to be called if an item is double clicked."""
         self._mpNameIid: dict[str, str] = {}
@@ -41,8 +45,10 @@ class Dnsview(tk.Frame):
         """
         self._initGui(
             name_col_width,
-            primary_col_width,
-            secondary_col_width)
+            prim_4_col_width,
+            secon_4_col_width,
+            prim_6_col_width,
+            secon_6_col_width)
         # Bindings...
         self._trvw.bind('<Double-1>', self._onItemDoubleClicked)
     
@@ -54,8 +60,10 @@ class Dnsview(tk.Frame):
     def _initGui(
             self,
             name_col_width: int,
-            primary_col_width: int,
-            secondary_col_width: int,
+            prim_4_col_width: int,
+            secon_4_col_width: int,
+            prim_6_col_width: int,
+            secon_6_col_width: int,
             ) -> None:
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
@@ -87,8 +95,10 @@ class Dnsview(tk.Frame):
         # Format columns
         self._trvw.config(columns=(
             self._NAME_COL_IDX,
-            self._PRIM_COL_IDX,
-            self._SECON_COL_IDX,))
+            self._PRIM_4_COL_IDX,
+            self._SECON_4_COL_IDX,
+            self._PRIM_6_COL_IDX,
+            self._SECON_6_COL_IDX,))
         self._trvw.column('#0', width=0, stretch=tk.NO)  # Hidden column for tree structure
         self._trvw.column(
             self._NAME_COL_IDX,
@@ -96,29 +106,46 @@ class Dnsview(tk.Frame):
             width=name_col_width,
             stretch=False)
         self._trvw.column(
-            self._PRIM_COL_IDX,
+            self._PRIM_4_COL_IDX,
             anchor=tk.W,
-            width=primary_col_width,
+            width=prim_4_col_width,
             stretch=False)
         self._trvw.column(
-            self._SECON_COL_IDX,
+            self._SECON_4_COL_IDX,
             anchor=tk.W,
-            width=secondary_col_width,
+            width=secon_4_col_width,
+            stretch=False)
+        self._trvw.column(
+            self._PRIM_6_COL_IDX,
+            anchor=tk.W,
+            width=prim_6_col_width,
+            stretch=False)
+        self._trvw.column(
+            self._SECON_6_COL_IDX,
+            anchor=tk.W,
+            width=secon_6_col_width,
             stretch=False)
         # Create column headings
         self._trvw.heading('#0', text='', anchor=tk.W)  # Hidden heading for tree structure
         self._trvw.heading(self._NAME_COL_IDX, text=_('NAME'), anchor=tk.W)
-        self._trvw.heading(self._PRIM_COL_IDX, text=_('PRIMARY'), anchor=tk.W)
+        self._trvw.heading(self._PRIM_4_COL_IDX, text=_('PRIM_4'), anchor=tk.W)
         self._trvw.heading(
-            self._SECON_COL_IDX,
-            text=_('SECONDARY'),
+            self._SECON_4_COL_IDX,
+            text=_('SECON_4'),
+            anchor=tk.W)
+        self._trvw.heading(self._PRIM_6_COL_IDX, text=_('PRIM_6'), anchor=tk.W)
+        self._trvw.heading(
+            self._SECON_6_COL_IDX,
+            text=_('SECON_6'),
             anchor=tk.W)
     
-    def _dnsToValues(self, dns: DnsServer) -> tuple[str, str, str]:
+    def _dnsToValues(self, dns: DnsServer) -> tuple[str, str, str, str, str]:
         return (
             dns.name,
-            str(dns.primary),
-            '' if dns.secondary is None else str(dns.secondary))
+            '' if dns.prim_4 is None else str(dns.prim_4),
+            '' if dns.secon_4 is None else str(dns.secon_4),
+            '' if dns.prim_6 is None else str(dns.prim_6),
+            '' if dns.secon_6 is None else str(dns.secon_6))
     
     def clear(self) -> None:
         """Clears all DNS servers from the View."""
@@ -127,14 +154,16 @@ class Dnsview(tk.Frame):
         self._mpIidName.clear()
         self._mpNameIid.clear()
     
-    def getColsWidth(self) -> tuple[int, int, int]:
-        """Returns the width of `Name`, `Primary`, and `Secondary` columns
-        respectively.
+    def getColsWidth(self) -> tuple[int, int, int, int, int]:
+        """Returns the width of `name`, `prim_4`, and `secon_4`, 'prim_6',
+        and 'secon_6' columns width as a 5-tuple respectively.
         """
         colsWidth = list[int]()
         colsWidth.append(self._trvw.column(self._NAME_COL_IDX, 'width'))
-        colsWidth.append(self._trvw.column(self._PRIM_COL_IDX, 'width'))
-        colsWidth.append(self._trvw.column(self._SECON_COL_IDX, 'width'))
+        colsWidth.append(self._trvw.column(self._PRIM_4_COL_IDX, 'width'))
+        colsWidth.append(self._trvw.column(self._SECON_4_COL_IDX, 'width'))
+        colsWidth.append(self._trvw.column(self._PRIM_6_COL_IDX, 'width'))
+        colsWidth.append(self._trvw.column(self._SECON_6_COL_IDX, 'width'))
         return tuple(colsWidth) # type: ignore
     
     def getSetectedName(self) -> str | None:

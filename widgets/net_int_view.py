@@ -70,7 +70,7 @@ class NetIntView(tk.Frame):
     def populate(self, items: Iterable[NetInt]) -> None:
         self.clear()
         for item in items:
-            self._lstbx.insert(tk.END, item['Name']) # type: ignore
+            self._lstbx.insert(tk.END, item.NetConnectionID) # type: ignore
             self._lstbx.itemconfig(tk.END, fg=self._getItemColor(item))
     
     def clear(self) -> None:

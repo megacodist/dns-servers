@@ -3,8 +3,7 @@
 #
 
 
-from ipaddress import IPv4Address
-import logging
+from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 from queue import Queue
 from typing import Callable, Literal, TYPE_CHECKING
 from urllib.parse import ParseResult
@@ -45,14 +44,14 @@ def listDnses(
         q: Queue[str] | None,
         db: IDatabase,
         ) -> tuple[dict[str, DnsServer], dict[
-            frozenset[IPv4Address], DnsServer]]:
+            frozenset[IPv4 | IPv6], DnsServer]]:
     if q:
         q.put(_('READING_DNSES'))
     dnses = db.selctAllDnses()
     if q:
         q.put(_('CONSTRUCTING_DATA'))
     mpNameDns = {dns.name:dns for dns in dnses}
-    mpIpDns = {dns.ipsToSet():dns for dns in dnses}
+    mpIpDns = {dns.toSet():dns for dns in dnses}
     return mpNameDns, mpIpDns
 
 
@@ -105,7 +104,7 @@ def setDns(
         raise OpFailedError('cannot set DNS servers as expected')
 
 
-def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
+def dnsToSetIps(dns: DnsServer) -> set[IPv4]:
     """Converts a `DnsServer` object into a set of one or two IPv4
     objects.
     """
@@ -113,7 +112,7 @@ def dnsToSetIps(dns: DnsServer) -> set[IPv4Address]:
         {dns.primary, dns.secondary}
 
 
-def ipToStr(ip: IPv4Address | None) -> str:
+def ipToStr(ip: IPv4 | None) -> str:
     """Converts an optional IPv4 object to string."""
     return '' if ip is None else str(ip)
 

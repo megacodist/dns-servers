@@ -3,7 +3,7 @@
 #
 
 from concurrent.futures import CancelledError, Future
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from pathlib import Path
 import tkinter as tk
@@ -14,7 +14,8 @@ import PIL.Image
 import PIL.ImageTk
 
 from .dns_view import Dnsview
-from .interface_view import NetIntView
+from .net_int_view import NetIntView
+from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
 from ntwrk import NetInt
@@ -53,7 +54,7 @@ class DnsWin(tk.Tk):
         self._netInts: list[NetInt]
         """A list of all network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
-        self._mpIpDns: dict[frozenset[IPv4Address], DnsServer]
+        self._mpIpDns: dict[frozenset[IPv4 | IPv6], DnsServer]
         # Images...
         self._GIF_WAIT: GifImage
         self._GIF_DWAIT: GifImage
@@ -79,16 +80,18 @@ class DnsWin(tk.Tk):
         self._initGui()
         self.update()
         self._pwin_leftRight.sashpos(0, self._settings.net_int_ips_width)
-        self._settings.net_int_ips_width = self._pwin_netIntIps.sashpos(0)
-        self._settings.net_int_height = self._pwin_netIntIps.sashpos(0)
-        self._settings.msgs_height = self._pwin_dnses.sashpos(0)
-        self._settings.urls_width = self._pwin_urlsMsgs.sashpos(0)
+        self.update_idletasks()
+        self._pwin_netIntIps.sashpos(0, self._settings.net_int_height)
+        self.update_idletasks()
+        self._pwin_dnses.sashpos(0, self._settings.msgs_height)
+        self.update_idletasks()
+        self._pwin_urlsMsgs.sashpos(0, self._settings.urls_width)
         # The rest of initializing...
         self._asyncMngr = AsyncOpManager(self, self._GIF_WAIT)
         # Bindings & events...
         self.protocol('WM_DELETE_WINDOW', self._onWinClosing)
         # Initializes views...
-        #self._initViews()
+        self.after(100, self._initViews)
     
     def _loadRes(self) -> None:
         # Loading `wait.gif`...
@@ -127,8 +130,8 @@ class DnsWin(tk.Tk):
         self._HIMG_ARROW = PIL.Image.open(self._RES_DIR / 'arrow.png')
         self._HIMG_ARROW = self._HIMG_ARROW.resize(size=(16, 16,))
         self._IMG_ARROW = PIL.ImageTk.PhotoImage(image=self._HIMG_ARROW)
-    
-    def _initGui_old(self) -> None:
+
+    def _initGui(self) -> None:
         #
         self._frm_container = tk.Frame(self)
         self._frm_container.pack(
@@ -136,151 +139,111 @@ class DnsWin(tk.Tk):
             expand=1,
             padx=7,
             pady=7)
-        #
-        self._pdwin = ttk.PanedWindow(
-            master=self._frm_container,
+        # Create the main PanedWindow (left and right)
+        self._pwin_leftRight = ttk.PanedWindow(
+            self._frm_container,
             orient=tk.HORIZONTAL)
-        self._pdwin.pack(
-            fill=tk.BOTH,
-            expand=1)
-        #
-        self._frm_leftPanel = tk.Frame(self._pdwin, relief=tk.SUNKEN)
-        self._frm_leftPanel.columnconfigure(0, weight=1)
-        self._frm_leftPanel.rowconfigure(0, weight=1)
-        self._frm_leftPanel.rowconfigure(1, weight=1)
-        self._frm_leftPanel.pack(fill=tk.BOTH, expand=1)
-        self._pdwin.add(self._frm_leftPanel, weight=1)
-        #
-        self._frm_interDnses = tk.Frame(self._frm_leftPanel)
-        self._frm_interDnses.columnconfigure(0, weight=1)
-        self._frm_interDnses.columnconfigure(1, weight=1)
-        self._frm_interDnses.rowconfigure(0, weight=1)
-        self._frm_interDnses.grid(
-            column=0,
-            row=0,
-            sticky=tk.NSEW,)
+        self._pwin_leftRight.pack(fill=tk.BOTH, expand=True)
+        # Left pane content
+        self._pwin_netIntIps = ttk.PanedWindow(
+            self._pwin_leftRight,
+            orient=tk.VERTICAL)
+        self._pwin_netIntIps.pack(fill=tk.BOTH, expand=True)
+        self._pwin_leftRight.add(self._pwin_netIntIps, weight=1)
         #
         self._lfrm_netInts = ttk.Labelframe(
-            self._frm_interDnses,
-            text=_('NET_INTERS'))
-        self._lfrm_netInts.grid(
-            column=0,
-            row=0,
-            padx=3,
-            pady=3,
-            sticky=tk.NSEW,)
+            self._pwin_netIntIps,
+            text=_('NET_INTS'))
+        self._lfrm_netInts.pack(fill=tk.BOTH, expand=True)
+        self._pwin_netIntIps.add(self._lfrm_netInts, weight=1)
         #
         self._netintvw = NetIntView(
             self._lfrm_netInts,
             self._readDnsInfo)
-        self._netintvw.pack(fill=tk.BOTH, expand=1)
+        self._netintvw.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         #
-        self._lfrm_dnsInfo = ttk.Labelframe(self._frm_interDnses)
-        self._lfrm_dnsInfo.columnconfigure(0, weight=1)
-        self._lfrm_dnsInfo.grid(
-            column=1,
-            row=0,
-            padx=3,
-            pady=3,
-            sticky=tk.NSEW,)
+        self._lfrm_ips = ttk.LabelFrame(self._pwin_netIntIps)
+        self._lfrm_ips.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+        self._pwin_netIntIps.add(self._lfrm_ips, weight=1)
         #
-        self._lbl_primary = ttk.Label(
-            self._lfrm_dnsInfo,
-            text=_('PRIMARY'))
-        self._lbl_primary.grid(
-            column=0,
-            row=0,
-            sticky=tk.W,)
+        self._ipsvw = IpsView(self._lfrm_ips)
+        self._ipsvw.pack(fill=tk.BOTH, expand=True)
+        # Right PanedWindow (upper and lower)
+        self._pwin_dnses = ttk.PanedWindow(
+            self._pwin_leftRight,
+            orient=tk.VERTICAL)
+        self._pwin_dnses.pack(fill=tk.BOTH, expand=True)
+        self._pwin_leftRight.add(self._pwin_dnses, weight=2)
+        # Upper PanedWindow (left and right)
+        self._pwin_urlsMsgs = ttk.PanedWindow(
+            self._pwin_dnses,
+            orient=tk.HORIZONTAL)
+        self._pwin_urlsMsgs.pack(fill=tk.BOTH, expand=True)
+        self._pwin_dnses.add(self._pwin_urlsMsgs, weight=2)
+        # Upper left pane content
+        self._lfrm_urls = ttk.LabelFrame(self._pwin_urlsMsgs, text=_('URLS'))
+        self._lfrm_urls.pack(fill=tk.BOTH, expand=True)
+        self._pwin_urlsMsgs.add(self._lfrm_urls, weight=1)
+        # Upper right pane content
+        self._lfrm_msgs = ttk.LabelFrame(self._pwin_urlsMsgs, text=_('MSGS'))
+        self._lfrm_msgs.pack(fill=tk.BOTH, expand=True)
+        self._pwin_urlsMsgs.add(self._lfrm_msgs, weight=1)
         #
-        self._entry_primary = ttk.Entry(self._lfrm_dnsInfo)
-        self._entry_primary.grid(
-            column=0,
-            row=1,
-            sticky=tk.NSEW,)
-        #
-        self._lbl_secondary = ttk.Label(
-            self._lfrm_dnsInfo,
-            text=_('SECONDARY'))
-        self._lbl_secondary.grid(
-            column=0,
-            row=2,
-            sticky=tk.W,)
-        #
-        self._entry_secondary = ttk.Entry(self._lfrm_dnsInfo)
-        self._entry_secondary.grid(
-            column=0,
-            row=3,
-            sticky=tk.NSEW,)
-        #
-        self._msg_dnsName = tk.Message(
-            self._lfrm_dnsInfo,
-            anchor=tk.W,
-            justify=tk.LEFT)
-        self._msg_dnsName.grid(
-            column=0,
-            row=4,
-            sticky=tk.NSEW,)
+        self._msgvw = MessageView(self._lfrm_msgs, self._IMG_CLOSE)
+        self._msgvw.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         #
         self._lfrm_dnses = ttk.Labelframe(
-            self._frm_leftPanel,
+            self._pwin_dnses,
             text=_('DNS_SERVERS'))
         self._lfrm_dnses.columnconfigure(0, weight=1)
         self._lfrm_dnses.rowconfigure(1, weight=1)
-        self._lfrm_dnses.grid(
-            column=0,
-            row=1,
-            padx=3,
-            pady=3,
-            sticky=tk.NSEW,)
+        self._lfrm_dnses.pack(fill=tk.BOTH, expand=True)
+        self._pwin_dnses.add(self._lfrm_dnses, weight=1)
         #
         self._frm_dnsButns = tk.Frame(self._lfrm_dnses)
         self._frm_dnsButns.grid(
             column=0,
             row=0,
+            padx=4,
+            pady=4,
             sticky=tk.NSEW,)
         #
         self._btn_addDns = ttk.Button(
             self._frm_dnsButns,
             command=self._addDns,
             image=self._IMG_ADD) # type: ignore
-        self._btn_addDns.pack(
-            side=tk.LEFT)
+        self._btn_addDns.pack(side=tk.LEFT)
         #
         self._btn_deleteDns = ttk.Button(
             self._frm_dnsButns,
             command=self._deleteDns,
             image=self._IMG_REMOVE) # type: ignore
-        self._btn_deleteDns.pack(
-            side=tk.LEFT)
+        self._btn_deleteDns.pack(side=tk.LEFT)
         #
         self._btn_editDns = ttk.Button(
             self._frm_dnsButns,
             command=self._editDns,
             image=self._IMG_EDIT) # type: ignore
-        self._btn_editDns.pack(
-            side=tk.LEFT)
+        self._btn_editDns.pack(side=tk.LEFT)
         #
         self._btn_applyDns = ttk.Button(
             self._frm_dnsButns,
             command=self._applyDns,
             image=self._IMG_APPLY) # type: ignore
-        self._btn_applyDns.pack(
-            side=tk.LEFT)
+        self._btn_applyDns.pack(side=tk.LEFT)
         #
         self._dnsvw = Dnsview(
             self._lfrm_dnses,
             self._editDns,
             name_col_width=self._settings.name_col_width,
-            primary_col_width=self._settings.primary_col_width,
-            secondary_col_width=self._settings.secondary_col_width)
+            prim_4_col_width=self._settings.prim_4_col_width,
+            secon_4_col_width=self._settings.secon_4_col_width,
+            prim_6_col_width=self._settings.prim_6_col_width,
+            secon_6_col_width=self._settings.secon_6_col_width,)
         self._dnsvw.grid(
             column=0,
             row=1,
             sticky=tk.NSEW,)
-        #
-        self._msgvw = MessageView(self._pdwin, self._IMG_CLOSE)
-        self._msgvw.pack(fill=tk.BOTH, expand=1)
-        self._pdwin.add(self._msgvw, weight=1)
         # Creating menu bar...
         self._menubar = tk.Menu(
             master=self)
@@ -315,107 +278,6 @@ class DnsWin(tk.Tk):
             label=_('TEST_URL'),
             command=self._testUrl)
     
-    def _initGui(self) -> None:
-        #
-        self._frm_container = tk.Frame(self)
-        self._frm_container.pack(
-            fill=tk.BOTH,
-            expand=1,
-            padx=7,
-            pady=7)
-        # Create the main PanedWindow (left and right)
-        self._pwin_leftRight = ttk.PanedWindow(
-            self._frm_container,
-            orient=tk.HORIZONTAL)
-        self._pwin_leftRight.pack(fill=tk.BOTH, expand=True)
-        # Left pane content
-        self._pwin_netIntIps = ttk.PanedWindow(
-            self._pwin_leftRight,
-            orient=tk.HORIZONTAL)
-        self._pwin_netIntIps.pack(fill=tk.BOTH, expand=True)
-        self._pwin_leftRight.add(self._pwin_netIntIps, weight=1)
-        #
-        self._lfrm_netInts = ttk.Labelframe(
-            self._pwin_netIntIps,
-            text=_('NET_INTERS'))
-        self._lfrm_netInts.pack(fill=tk.BOTH, expand=True)
-        self._pwin_netIntIps.add(self._lfrm_netInts, weight=1)
-        #
-        self._netintvw = NetIntView(
-            self._lfrm_netInts,
-            self._readDnsInfo)
-        self._netintvw.pack(fill=tk.BOTH, expand=1)
-       #
-       #
-        # Right PanedWindow (upper and lower)
-        self._pwin_dnses = ttk.PanedWindow(
-            self._pwin_leftRight,
-            orient=tk.VERTICAL)
-        self._pwin_dnses.pack(fill=tk.BOTH, expand=True)
-        self._pwin_leftRight.add(self._pwin_dnses, weight=4)
-        # Upper PanedWindow (left and right)
-        self._pwin_urlsMsgs = ttk.PanedWindow(
-            self._pwin_dnses,
-            orient=tk.HORIZONTAL)
-        self._pwin_urlsMsgs.pack(fill=tk.BOTH, expand=True)
-        self._pwin_dnses.add(self._pwin_urlsMsgs, weight=3)
-        # Upper left pane content
-        self._lfrm_urls = ttk.LabelFrame(self._pwin_urlsMsgs, text=_('URLS'))
-        self._lfrm_urls.pack(fill=tk.BOTH, expand=True)
-        self._pwin_urlsMsgs.add(self._lfrm_urls, weight=1)
-        # Upper right pane content
-        self._lfrm_msgs = ttk.LabelFrame(self._pwin_urlsMsgs, text=_('MSGS'))
-        self._lfrm_msgs.pack(fill=tk.BOTH, expand=True)
-        self._pwin_urlsMsgs.add(self._lfrm_msgs, weight=1)
-        #
-        self._msgvw = MessageView(self._lfrm_msgs, self._IMG_CLOSE)
-        self._msgvw.pack(fill=tk.BOTH, expand=1)
-        #
-        self._lfrm_dnsInfo = ttk.Labelframe(self._pwin_dnses)
-        self._lfrm_dnsInfo.rowconfigure(1, weight=1)
-        self._lfrm_dnsInfo.pack(fill=tk.BOTH, expand=True)
-        self._pwin_dnses.add(self._pwin_dnses, weight=1)
-        #
-        self._frm_dnsButns = tk.Frame(self._lfrm_dnsInfo)
-        self._frm_dnsButns.grid(
-            column=0,
-            row=0,
-            sticky=tk.NSEW,)
-        self._btn_addDns = ttk.Button(
-            self._frm_dnsButns,
-            command=self._addDns,
-            image=self._IMG_ADD) # type: ignore
-        self._btn_addDns.pack(side=tk.LEFT)
-        #
-        self._btn_deleteDns = ttk.Button(
-            self._frm_dnsButns,
-            command=self._deleteDns,
-            image=self._IMG_REMOVE) # type: ignore
-        self._btn_deleteDns.pack(side=tk.LEFT)
-        #
-        self._btn_editDns = ttk.Button(
-            self._frm_dnsButns,
-            command=self._editDns,
-            image=self._IMG_EDIT) # type: ignore
-        self._btn_editDns.pack(side=tk.LEFT)
-        #
-        self._btn_applyDns = ttk.Button(
-            self._frm_dnsButns,
-            command=self._applyDns,
-            image=self._IMG_APPLY) # type: ignore
-        self._btn_applyDns.pack(side=tk.LEFT)
-        #
-        self._dnsvw = Dnsview(
-            self._lfrm_dnsInfo,
-            self._editDns,
-            name_col_width=self._settings.name_col_width,
-            primary_col_width=self._settings.primary_col_width,
-            secondary_col_width=self._settings.secondary_col_width)
-        self._dnsvw.grid(
-            column=0,
-            row=1,
-            sticky=tk.NSEW,)
-    
     def _onWinClosing(self) -> None:
         # Releasing images...
         self._GIF_WAIT.close()
@@ -436,8 +298,10 @@ class DnsWin(tk.Tk):
         self._settings.urls_width = self._pwin_urlsMsgs.sashpos(0)
         colsWidth = self._dnsvw.getColsWidth()
         self._settings.name_col_width = colsWidth[0]
-        self._settings.primary_col_width = colsWidth[1]
-        self._settings.secondary_col_width = colsWidth[2]
+        self._settings.prim_4_col_width = colsWidth[1]
+        self._settings.secon_4_col_width = colsWidth[2]
+        self._settings.prim_6_col_width = colsWidth[3]
+        self._settings.secon_6_col_width = colsWidth[4]
         # Cleaning up...
         self._asyncMngr.close()
         # Destroying the window...
@@ -471,17 +335,11 @@ class DnsWin(tk.Tk):
         self._readDnses()
     
     def _readDnsInfo(self, idx: int | None) -> None:
-        from utils.funcs import readDnsInfo
-        self._clearDnsInfoPanel()
         if idx is None:
             return
-        interName = self._netInts[idx]['Name']
-        self._lfrm_dnsInfo.config(text=interName) # type: ignore
-        self._asyncMngr.InitiateOp(
-            start_cb=readDnsInfo,
-            start_args=(interName,),
-            finish_cb=self._onDnsInfoRead,
-            widgets=(self._lfrm_dnsInfo,))
+        self._lfrm_ips.config(text=self._netInts[idx].NetConnectionID)
+        self._ipsvw.populate(self._netInts[idx], self._mpNameDns.values())
+
     
     def _onDnsInfoRead(self, fut: Future[DnsInfo | Literal['DHCP']]) -> None:
         from utils.funcs import mergeMsgs
@@ -520,7 +378,7 @@ class DnsWin(tk.Tk):
     def _onDnsesRead(
             self,
             fut: Future[tuple[dict[str, DnsServer], dict[
-                frozenset[IPv4Address], DnsServer]]],
+                frozenset[IPv4 | IPv6], DnsServer]]],
             ) -> None:
         try:
             self._mpNameDns, self._mpIpDns = fut.result()
@@ -640,13 +498,6 @@ class DnsWin(tk.Tk):
             del self._mpIpDns[dnsIps]
         self._dnsvw.changeDns(dnsName, newDns)
         self._db.updateDns(dnsName, newDns)
-    
-    def _clearDnsInfoPanel(self) -> None:
-        """Clears the DNS info panel."""
-        self._lfrm_dnsInfo.config(text='')
-        self._entry_primary.delete(0, tk.END)
-        self._entry_secondary.delete(0, tk.END)
-        self._msg_dnsName.config(text='')
     
     def _populateDnsInfoPanel(self, dns: DnsInfo | Literal['DHCP']) -> None:
         from utils.funcs import ipToStr

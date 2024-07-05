@@ -110,6 +110,20 @@ class DnsServer:
             return NotImplemented
         return self.toSet() == dns.toSet()
     
+    def getRole(self, ip: IPv4 | IPv6) -> IPRole | None:
+        try:
+            if self._prim_4 and self._prim_4 == ip:
+                return IPRole.PRIM_4
+            if self._secon_4 and self._secon_4 == ip:
+                return IPRole.SECON_4
+            if self._prim_6 and self._prim_6 == ip:
+                return IPRole.PRIM_6
+            if self._secon_6 and self._secon_6 == ip:
+                return IPRole.SECON_6
+        except Exception:
+            raise TypeError('expected an IPv4 or IPv6 address but got '
+                f'{ip.__class__.__qualname__}')
+    
     def __repr__(self) -> str:
         ips = list[str]()
         if self._prim_4:

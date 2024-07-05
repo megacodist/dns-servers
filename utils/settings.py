@@ -16,7 +16,9 @@ class AppSettings(types_module.AppSettings):
     net_int_height = 250
     msgs_height = 300
     urls_width = 250
-    #
+    # Columns widht...
     name_col_width = 100
-    primary_col_width = 100
-    secondary_col_width = 100
+    prim_4_col_width = 100
+    secon_4_col_width = 100
+    prim_6_col_width = 100
+    secon_6_col_width = 100

@@ -47,6 +47,18 @@ msgstr "Primary"
 msgid "SECONDARY"
 msgstr "Secondary"
 
+msgid "PRIM_4"
+msgstr "Primary IPv4"
+
+msgid "PRIM_6"
+msgstr "Primary IPv6"
+
+msgid "SECON_4"
+msgstr "Secondary IPv4"
+
+msgid "SECON_6"
+msgstr "Secondary IPv6"
+
 msgid "RESPONSE"
 msgstr "Response"
 
@@ -77,7 +89,7 @@ msgstr "Unknown HTTP status code"
 msgid "DNS_SERVERS"
 msgstr "DNS servers"
 
-msgid "NET_INTERS"
+msgid "NET_INTS"
 msgstr "Network interfaces"
 
 msgid "CLEAR_MSGS"
@@ -172,3 +184,6 @@ msgstr "The secondary IP is invalid."
 
 msgid "EQUAL_PRIM_SECON"
 msgstr "The primary and secondary IPs are equal."
+
+msgid "NET_INT_DHCP"
+msgstr "This network interface uses DHCP."
