@@ -36,38 +36,24 @@ class Widtrix:
     calling `update` or `update_idealtasks` and then assign the matrix
     to the `matric` property of this class.
     """
-    def __init__(self) -> None:
-        self._nRows: int = 0
-        self._nCols: int = 0
-        self._wmax = dict[int, int]()
-        """This data structure stores maximum width of every column."""
-        self._hmax = dict[int, int]()
-        """This data structure stores maximum height of every row."""
-        self._widgets: Mapping[_CR, ttk.Widget] = {}
+    def __init__(self, widgets: Mapping[_CR, ttk.Widget]) -> None:
+        self._nRows: int
+        self._nCols: int
+        self._wmax: dict[int, int]
+        self._hmax: dict[int, int]
+        self._x: tuple[int, ...]
+        self._y: tuple[int, ...]
+        self._calculate(widgets)
     
     @property
     def nRows(self) -> int:
-        """Gets the number of rows in the matrix."""
+        """Gets the number of rows of widgets."""
         return self._nRows
     
     @property
     def nCols(self) -> int:
-        """Gets the number of columns in the matrix."""
+        """Gets the number of columns of widgets."""
         return self._nCols
-    
-    @property
-    def matrix(self) -> Mapping[_CR, ttk.Widget]:
-        """Gets or sets a copy of the matrix of widgets. Because this
-        property works with a copy of the matrix, changing this matrix
-        outside of this object does not affect this object.
-        """
-        from copy import copy
-        return copy(self._widgets)
-    
-    @matrix.setter
-    def matrix(self, widgets: Mapping[_CR, ttk.Widget]) -> None:
-        self._widgets = widgets
-        self._calculate()
     
     def widthof(self, col: int) -> int:
         """Gets the width of specified column. It might raise `KeyError`."""
@@ -77,27 +63,31 @@ class Widtrix:
         """Gets the height of specified row. It might raise `KeyError`."""
         return self._hmax.get(row, 0)
     
+    def totalWidth(self) -> int:
+        """Returns the total width of the matrix."""
+        return self._x[self._nCols]
+    
+    def totalHeight(self) -> int:
+        """Returns the total width of the matrix."""
+        return self._y[self._nRows]
+    
     def xof(self, col: int) -> int:
         """Gets the x-coordinate of specified column. It might raise
         `ValueError`, `TypeError`, or `KeyError`.
         """
-        return sum(
-            self._wmax[col_]
-            for col_ in sorted(self._wmax.keys())[:col])
+        return self._x[col]
     
     def yof(self, row: int) -> int:
         """Gets the y-coordinate of specified row. It might raise
         `ValueError`, `TypeError`, or `KeyError`.
         """
-        return sum(
-            self._hmax[row_]
-            for row_ in sorted(self._hmax.keys())[:row])
+        return self._y[row]
     
-    def _calculate(self) -> None:
+    def _calculate(self, widgets: Mapping[_CR, ttk.Widget]) -> None:
         from collections import defaultdict
         ccrs = defaultdict[int, list[_CR]](list)
         rcrs = defaultdict[int, list[_CR]](list)
-        for cr in self._widgets:
+        for cr in widgets:
             ccrs[cr.col].append(cr)
             rcrs[cr.row].append(cr)
         # Calculating `nCols`...
@@ -112,15 +102,26 @@ class Widtrix:
             self._nRows = 0
         # Calculating `_wmax`...
         self._wmax = {
-            col:max(self._widgets[cr].winfo_width() for cr in ccrs[col])
+            col:max(widgets[cr].winfo_width() for cr in ccrs[col])
             for col in ccrs}
         # Calculating `_hmax`...
         self._hmax = {
-            row:max(self._widgets[cr].winfo_height() for cr in rcrs[row])
+            row:max(widgets[cr].winfo_height() for cr in rcrs[row])
             for row in rcrs}
-    
-    def __getitem__(self, cr: _CR) -> ttk.Widget:
-        return self._widgets[cr]
+        # Calculating `_x`...
+        x = [0]
+        value = 0
+        for idx in range(self._nCols):
+            value += self._wmax.get(idx, 0)
+            x.append(value)
+        self._x = tuple(x)
+        # Calculating `_y`...
+        y = [0]
+        value = 0
+        for idx in range(self._nRows):
+            value += self._hmax.get(idx, 0)
+            y.append(value)
+        self._y = tuple(y)
 
 
 class IpsView(ttk.Frame):
@@ -128,9 +129,14 @@ class IpsView(ttk.Frame):
             self,
             master: tk.Misc | None = None,
             *,
-            foo: str = '',
+            line_space: int = 3,
+            line_width = 1,
             ) -> None:
         super().__init__(master)
+        self._sLine = line_space
+        """The spacing between lines."""
+        self._wLine = line_width
+        """The width of lines."""
         self._mode = _RedrawMode.NONE
         self._ips: Iterable[IPv4 | IPv6] = tuple()
         self._nmRoles: Iterable[tuple[str, tuple[IPRole | None, ...]]] = tuple()
@@ -138,6 +144,11 @@ class IpsView(ttk.Frame):
         self._lbls = dict[_CR, ttk.Label]()
         """The matrix of all labels."""
         self._initGui()
+        # Binding events...
+        self._cnvs.bind('<Configure>', self._onSizeChanged)
+    
+    def _onSizeChanged(self, event: tk.Event) -> None:
+        pass
     
     def _initGui(self) -> None:
         #
@@ -153,6 +164,7 @@ class IpsView(ttk.Frame):
         self._cnvs = tk.Canvas(
             self,
             bd=0,
+            borderwidth=0,
             xscrollcommand=self._hscrlbr.set,
             yscrollcommand=self._vscrlbr.set)  
         self._vscrlbr['command'] = self._cnvs.yview
@@ -240,48 +252,93 @@ class IpsView(ttk.Frame):
     def _redrawRoles(self) -> None:
         self._cnvs.delete('all')
         self._lbls.clear()
+        y = self._getCnvsHeight() + 2
         for row, ip in enumerate(self._ips, 1):
             self._lbls[_CR(0, row)] = ttk.Label(self._cnvs, text=str(ip))
-            self._lbls[_CR(0, row)].pack(anchor='nw')
+            self._lbls[_CR(0, row)].place(x=0, y=y)
         for col, mnRoles in enumerate(self._nmRoles, 1):
             self._lbls[_CR(col, 0)] = ttk.Label(self._cnvs, text=mnRoles[0])
-            self._lbls[_CR(col, 0)].pack(anchor='nw')
+            self._lbls[_CR(col, 0)].place(x=0, y=y)
             for row, role in enumerate(mnRoles[1], 1):
                 if role is not None:
                     self._lbls[_CR(col, row)] = ttk.Label(
                         self._cnvs,
                         text=self._roleToStr(role))
-                    self._lbls[_CR(col, row)].pack(anchor='nw')
+                    self._lbls[_CR(col, row)].place(x=0, y=y)
         self.update_idletasks()
-        widtrix = Widtrix()
-        widtrix.matrix = self._lbls
-        #
-        xys = dict[_CR, tuple[int, int]]()
+        widtrix = Widtrix(self._lbls)
+        # Darwing labels...
         for col in range(widtrix.nCols):
             for row in range(widtrix.nRows):
                 cr = _CR(col, row)
                 try:
-                    lbl = widtrix[cr]
+                    lbl = self._lbls[cr]
                 except KeyError:
                     continue
-                try:
-                    xy = xys[cr]
-                except KeyError:
-                    xy = (widtrix.xof(cr.col), widtrix.yof(cr.row),)
-                    xys[cr] = xy
+                x = widtrix.xof(cr.col) + (2 * (cr.col + 1) * self._sLine) + \
+                    (cr.col * self._wLine) + (widtrix.widthof(cr.col) // 2)
+                y = widtrix.yof(cr.row) + (2 * (cr.row + 1) * self._sLine) + \
+                    (cr.row * self._wLine)
                 self._cnvs.create_window(
-                    xy[0],
-                    xy[1],
-                    window=widtrix[cr],
-                    anchor='nw')
-        #
-        lastCol = widtrix.nCols - 1
-        lastRow = widtrix.nRows - 1
+                    x,
+                    y,
+                    window=lbl,
+                    anchor='n')
+        # Drawing horizontal lines...
+        if widtrix.nCols > 1:
+            lineWidth = widtrix.totalWidth() + (widtrix.nCols - 1) * (
+                2 * self._sLine + self._wLine)
+        else:
+            lineWidth = widtrix.totalWidth() + 20
+        x0 = 2 * self._sLine + self._sLine
+        y0 = (3 * self._sLine) + self._wLine + widtrix.yof(1)
+        self._cnvs.create_line(
+            x0,
+            y0,
+            lineWidth + self._sLine,
+            y0,
+            width=self._wLine)
+        for idx in range(2, widtrix.nRows):
+            y0 = (2 * idx + 1) * self._sLine + (idx * self._wLine) \
+                + widtrix.yof(idx)
+            self._cnvs.create_line(
+                x0,
+                y0,
+                lineWidth + self._sLine,
+                y0,
+                dash=(3, 3,),
+                width=self._wLine)
+        # Drawing vertical lines...
+        lineWidth = widtrix.totalHeight() + (widtrix.nRows - 1) * (2 *
+            self._sLine + self._wLine)
+        x0 = (3 * self._sLine) + self._wLine + widtrix.xof(1)
+        y0 = 2 * self._sLine + self._sLine
+        self._cnvs.create_line(
+            x0,
+            y0,
+            x0,
+            lineWidth + self._sLine,
+            width=self._wLine)
+        for idx in range(2, widtrix.nCols):
+            x0 = (2 * idx + 1) * self._sLine + (idx * self._wLine) \
+                + widtrix.xof(idx)
+            self._cnvs.create_line(
+                x0,
+                y0,
+                x0,
+                lineWidth + self._sLine,
+                dash=(3, 3,),
+                width=self._wLine)
+        # Setting `scrollregion`...
+        scrlWidth = widtrix.totalWidth() + (widtrix.nCols + 1) * (
+            2 * self._sLine + self._wLine)
+        scrlHeight = widtrix.totalHeight() + (widtrix.nRows + 1) * (
+            2 * self._sLine + self._wLine)
         self._cnvs.config(scrollregion=(
             0,
             0,
-            widtrix.xof(lastCol) + widtrix.widthof(lastCol),
-            widtrix.yof(lastRow) + widtrix.heightof(lastRow)))
+            scrlWidth,
+            scrlHeight,))
     
     def _roleToStr(self, role: IPRole | None) -> str:
         match role:
@@ -297,10 +354,12 @@ class IpsView(ttk.Frame):
                 return ''
     
     def _getCnvsWidth(self) -> int:
-        return self._cnvs.winfo_width() - (2 * int(self._cnvs.cget('bd')))
+        bd = max([2, int(self._cnvs.cget('borderwidth')),])
+        return self._cnvs.winfo_width() - (2 * bd)
     
     def _getCnvsHeight(self) -> int:
-        return self._cnvs.winfo_height() - (2 * int(self._cnvs.cget('bd')))
+        bd = max([2, int(self._cnvs.cget('borderwidth')),])
+        return self._cnvs.winfo_height() - (2 * bd)
     
     def clear(self) -> None:
         self._mode = _RedrawMode.NONE
