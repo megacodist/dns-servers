@@ -6,7 +6,7 @@ import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Iterable, TYPE_CHECKING, NamedTuple
+from typing import Callable, Iterable, TYPE_CHECKING, Mapping, NamedTuple
 
 from db import DnsServer, IPRole
 from ntwrk import NetInt
@@ -31,20 +31,96 @@ class _CR(NamedTuple):
 
 
 class Widtrix:
+    """This class represents a matrix of widgets. The typical using
+    scenario is to save widgets in a matrix of `dict[_CR, ttk.Widget]`,
+    calling `update` or `update_idealtasks` and then assign the matrix
+    to the `matric` property of this class.
+    """
     def __init__(self) -> None:
         self._nRows: int = 0
         self._nCols: int = 0
-        self._widgets = dict[_CR, ttk.Widget]()
+        self._wmax = dict[int, int]()
+        """This data structure stores maximum width of every column."""
+        self._hmax = dict[int, int]()
+        """This data structure stores maximum height of every row."""
+        self._widgets: Mapping[_CR, ttk.Widget] = {}
     
     @property
     def nRows(self) -> int:
+        """Gets the number of rows in the matrix."""
         return self._nRows
     
     @property
     def nCols(self) -> int:
+        """Gets the number of columns in the matrix."""
         return self._nCols
     
-    def 
+    @property
+    def matrix(self) -> Mapping[_CR, ttk.Widget]:
+        """Gets or sets a copy of the matrix of widgets. Because this
+        property works with a copy of the matrix, changing this matrix
+        outside of this object does not affect this object.
+        """
+        from copy import copy
+        return copy(self._widgets)
+    
+    @matrix.setter
+    def matrix(self, widgets: Mapping[_CR, ttk.Widget]) -> None:
+        self._widgets = widgets
+        self._calculate()
+    
+    def widthof(self, col: int) -> int:
+        """Gets the width of specified column. It might raise `KeyError`."""
+        return self._wmax.get(col, 0)
+    
+    def heightof(self, row: int) -> int:
+        """Gets the height of specified row. It might raise `KeyError`."""
+        return self._hmax.get(row, 0)
+    
+    def xof(self, col: int) -> int:
+        """Gets the x-coordinate of specified column. It might raise
+        `ValueError`, `TypeError`, or `KeyError`.
+        """
+        return sum(
+            self._wmax[col_]
+            for col_ in sorted(self._wmax.keys())[:col])
+    
+    def yof(self, row: int) -> int:
+        """Gets the y-coordinate of specified row. It might raise
+        `ValueError`, `TypeError`, or `KeyError`.
+        """
+        return sum(
+            self._hmax[row_]
+            for row_ in sorted(self._hmax.keys())[:row])
+    
+    def _calculate(self) -> None:
+        from collections import defaultdict
+        ccrs = defaultdict[int, list[_CR]](list)
+        rcrs = defaultdict[int, list[_CR]](list)
+        for cr in self._widgets:
+            ccrs[cr.col].append(cr)
+            rcrs[cr.row].append(cr)
+        # Calculating `nCols`...
+        try:
+            self._nCols = max(ccrs.keys()) + 1
+        except ValueError:
+            self._nCols = 0
+        # Calculating `nRows`...
+        try:
+            self._nRows = max(rcrs.keys()) + 1
+        except ValueError:
+            self._nRows = 0
+        # Calculating `_wmax`...
+        self._wmax = {
+            col:max(self._widgets[cr].winfo_width() for cr in ccrs[col])
+            for col in ccrs}
+        # Calculating `_hmax`...
+        self._hmax = {
+            row:max(self._widgets[cr].winfo_height() for cr in rcrs[row])
+            for row in rcrs}
+    
+    def __getitem__(self, cr: _CR) -> ttk.Widget:
+        return self._widgets[cr]
 
 
 class IpsView(ttk.Frame):
@@ -59,6 +135,8 @@ class IpsView(ttk.Frame):
         self._ips: Iterable[IPv4 | IPv6] = tuple()
         self._nmRoles: Iterable[tuple[str, tuple[IPRole | None, ...]]] = tuple()
         self._msg = ''
+        self._lbls = dict[_CR, ttk.Label]()
+        """The matrix of all labels."""
         self._initGui()
     
     def _initGui(self) -> None:
@@ -161,34 +239,49 @@ class IpsView(ttk.Frame):
 
     def _redrawRoles(self) -> None:
         self._cnvs.delete('all')
-        lblIps = [ttk.Label(self._cnvs, text=str(ip)) for ip in self._ips]
-        lblHeads = [
-            ttk.Label(self._cnvs, text='\n'.join(tpl[0].split()))
-            for tpl in self._nmRoles]
+        self._lbls.clear()
+        for row, ip in enumerate(self._ips, 1):
+            self._lbls[_CR(0, row)] = ttk.Label(self._cnvs, text=str(ip))
+            self._lbls[_CR(0, row)].pack(anchor='nw')
+        for col, mnRoles in enumerate(self._nmRoles, 1):
+            self._lbls[_CR(col, 0)] = ttk.Label(self._cnvs, text=mnRoles[0])
+            self._lbls[_CR(col, 0)].pack(anchor='nw')
+            for row, role in enumerate(mnRoles[1], 1):
+                if role is not None:
+                    self._lbls[_CR(col, row)] = ttk.Label(
+                        self._cnvs,
+                        text=self._roleToStr(role))
+                    self._lbls[_CR(col, row)].pack(anchor='nw')
         self.update_idletasks()
-        maxIpsWidth = max(lbl.winfo_width() for lbl in lblIps)
-        maxHeadsWidth = max(lbl.winfo_height() for lbl in lblHeads)
+        widtrix = Widtrix()
+        widtrix.matrix = self._lbls
         #
-        lbl = tk.Label(self._frm, bitmap='gray50')
-        lbl.grid(column=0, row=0, sticky=tk.NSEW)
+        xys = dict[_CR, tuple[int, int]]()
+        for col in range(widtrix.nCols):
+            for row in range(widtrix.nRows):
+                cr = _CR(col, row)
+                try:
+                    lbl = widtrix[cr]
+                except KeyError:
+                    continue
+                try:
+                    xy = xys[cr]
+                except KeyError:
+                    xy = (widtrix.xof(cr.col), widtrix.yof(cr.row),)
+                    xys[cr] = xy
+                self._cnvs.create_window(
+                    xy[0],
+                    xy[1],
+                    window=widtrix[cr],
+                    anchor='nw')
         #
-        for idx, ip in enumerate(self._ips, 1):
-            lbl = ttk.Label(self._frm, text=str(ip))
-            lbl.grid(column=0, row=idx)
-        #
-        for j, tpl in enumerate(self._nmRoles, 1):
-            lbl = ttk.Label(self._frm, text=tpl[0])
-            lbl.grid(column=j, row=0)
-            for i, role in enumerate(tpl[1], 1):
-                lbl = ttk.Label(self._frm, text=self._roleToStr(role))
-                lbl.grid(column=j, row=i)
-        #
-        self._cnvs.create_window(10, 10, anchor="nw", window=self._frm)
+        lastCol = widtrix.nCols - 1
+        lastRow = widtrix.nRows - 1
         self._cnvs.config(scrollregion=(
             0,
             0,
-            self._frm.winfo_width(),
-            self._frm.winfo_height()))
+            widtrix.xof(lastCol) + widtrix.widthof(lastCol),
+            widtrix.yof(lastRow) + widtrix.heightof(lastRow)))
     
     def _roleToStr(self, role: IPRole | None) -> str:
         match role:
