@@ -296,20 +296,21 @@ class IpsView(ttk.Frame):
         # Clearing the canvas...
         self._cnvs.delete('all')
         self._mpCrLbl.clear()
-        # Creating labels...
+        # Creating labels outside visible boundaries...
+        x = self._getCnvsWidth() + 2
         y = self._getCnvsHeight() + 2
         for row, ip in enumerate(self._ips, 1):
             cr = _CR(0, row)
             lbl = ttk.Label(self._cnvs, cursor='hand2', text=str(ip))
             lbl.bind('<Button-1>', self._onLblClicked)
-            lbl.place(x=0, y=y)
+            lbl.place(x=x, y=y)
             self._mpCrLbl[cr] = lbl
             self._mpLblCr[lbl] = cr
         for col, mnRoles in enumerate(self._nmRoles, 1):
             cr = _CR(col, 0)
             lbl = ttk.Label(self._cnvs, text=mnRoles[0])
             lbl.bind('<Button-1>', self._onCnvsClicked)
-            lbl.place(x=0, y=y)
+            lbl.place(x=x, y=y)
             self._mpCrLbl[cr] = lbl
             self._mpLblCr[lbl] = cr
             for row, role in enumerate(mnRoles[1], 1):
@@ -320,7 +321,7 @@ class IpsView(ttk.Frame):
                         cursor='hand2',
                         text=self._roleToStr(role))
                     lbl.bind('<Button-1>', self._onLblClicked)
-                    lbl.place(x=0, y=y)
+                    lbl.place(x=x, y=y)
                     self._mpCrLbl[cr] = lbl
                     self._mpLblCr[lbl] = cr
             self._mpLblCr[lbl] = cr
