@@ -4,12 +4,14 @@
 
 import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
+import logging
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping, NamedTuple
 
 from db import DnsServer, IPRole
 from ntwrk import NetInt
+from utils.keyboard import Modifiers
 
 
 if TYPE_CHECKING:
@@ -137,18 +139,58 @@ class IpsView(ttk.Frame):
         """The spacing between lines."""
         self._wLine = line_width
         """The width of lines."""
+        self._width = 0
+        """The width of the canvas."""
+        self._height = 0
+        """The height of the canvas."""
+        self._selection = list[int]()
+        """The list of all selected IPs index."""
         self._mode = _RedrawMode.NONE
         self._ips: Iterable[IPv4 | IPv6] = tuple()
         self._nmRoles: Iterable[tuple[str, tuple[IPRole | None, ...]]] = tuple()
         self._msg = ''
-        self._lbls = dict[_CR, ttk.Label]()
-        """The matrix of all labels."""
+        self._mpCrLbl = dict[_CR, ttk.Label]()
+        """The between matrix positions and labels:
+        
+        `_CR(column, row) -> ttk,Label`
+        """
+        self._mpLblCr = dict[ttk.Label, _CR]()
+        """The between labels andmatrix positions:
+        
+        `ttk,Label -> _CR(column, row)`
+        """
         self._initGui()
+        self._defaultClr = self._cnvs.cget('background')
+        self._selectedClr = 'lightblue'
         # Binding events...
         self._cnvs.bind('<Configure>', self._onSizeChanged)
+        self._cnvs.bind('<Button-1>', self._onCnvsClicked)
     
     def _onSizeChanged(self, event: tk.Event) -> None:
-        pass
+        if event.width != self._width or event.height != self._height:
+            self._width = event.width
+            self._height = event.height
+            if self._mode == _RedrawMode.MSG:
+                self._redrawMsg()
+    
+    def _onCnvsClicked(self, _: tk.Event) -> None:
+        if self._mode != _RedrawMode.IPS:
+            return
+        self.deselect()
+    
+    def _onLblClicked(self, event: tk.Event) -> None:
+        if isinstance(event.state, str):
+            logging.error('The event.state is str')
+            return
+        idx = self._mpLblCr[event.widget].row - 1
+        if (event.state & Modifiers.CONTROL) == Modifiers.CONTROL:
+            if idx in self._selection:
+                self.delSeltIdx(idx)
+            else:
+                self.addSelIdx(idx)
+        else:
+            self.deselect()
+            self.addSelIdx(idx)
     
     def _initGui(self) -> None:
         #
@@ -223,6 +265,7 @@ class IpsView(ttk.Frame):
         msg = tk.Message(
             self._cnvs,
             text=self._msg,
+            justify='center',
             width=msgWidth,)
         self.update_idletasks()
         msgHeight = msg.winfo_height()
@@ -250,29 +293,45 @@ class IpsView(ttk.Frame):
                 cnvsHeight,))
 
     def _redrawRoles(self) -> None:
+        # Clearing the canvas...
         self._cnvs.delete('all')
-        self._lbls.clear()
+        self._mpCrLbl.clear()
+        # Creating labels...
         y = self._getCnvsHeight() + 2
         for row, ip in enumerate(self._ips, 1):
-            self._lbls[_CR(0, row)] = ttk.Label(self._cnvs, text=str(ip))
-            self._lbls[_CR(0, row)].place(x=0, y=y)
+            cr = _CR(0, row)
+            lbl = ttk.Label(self._cnvs, cursor='hand2', text=str(ip))
+            lbl.bind('<Button-1>', self._onLblClicked)
+            lbl.place(x=0, y=y)
+            self._mpCrLbl[cr] = lbl
+            self._mpLblCr[lbl] = cr
         for col, mnRoles in enumerate(self._nmRoles, 1):
-            self._lbls[_CR(col, 0)] = ttk.Label(self._cnvs, text=mnRoles[0])
-            self._lbls[_CR(col, 0)].place(x=0, y=y)
+            cr = _CR(col, 0)
+            lbl = ttk.Label(self._cnvs, text=mnRoles[0])
+            lbl.bind('<Button-1>', self._onCnvsClicked)
+            lbl.place(x=0, y=y)
+            self._mpCrLbl[cr] = lbl
+            self._mpLblCr[lbl] = cr
             for row, role in enumerate(mnRoles[1], 1):
                 if role is not None:
-                    self._lbls[_CR(col, row)] = ttk.Label(
+                    cr = _CR(col, row)
+                    lbl = ttk.Label(
                         self._cnvs,
+                        cursor='hand2',
                         text=self._roleToStr(role))
-                    self._lbls[_CR(col, row)].place(x=0, y=y)
+                    lbl.bind('<Button-1>', self._onLblClicked)
+                    lbl.place(x=0, y=y)
+                    self._mpCrLbl[cr] = lbl
+                    self._mpLblCr[lbl] = cr
+            self._mpLblCr[lbl] = cr
         self.update_idletasks()
-        widtrix = Widtrix(self._lbls)
+        widtrix = Widtrix(self._mpCrLbl)
         # Darwing labels...
         for col in range(widtrix.nCols):
             for row in range(widtrix.nRows):
                 cr = _CR(col, row)
                 try:
-                    lbl = self._lbls[cr]
+                    lbl = self._mpCrLbl[cr]
                 except KeyError:
                     continue
                 x = widtrix.xof(cr.col) + (2 * (cr.col + 1) * self._sLine) + \
@@ -363,4 +422,26 @@ class IpsView(ttk.Frame):
     
     def clear(self) -> None:
         self._mode = _RedrawMode.NONE
+        self._selection.clear()
         self._cnvs.delete('all')
+    
+    def deselect(self) -> None:
+        """Deselects all the selected IPs if any."""
+        for idx in self._selection.copy():
+            self.delSeltIdx(idx)
+
+    def addSelIdx(self, idx: int) -> None:
+        """Adds the IPs with `idx` index to the selection."""
+        self._mpCrLbl[_CR(0, idx + 1)].config(background=self._selectedClr)
+        self._selection.append(idx)
+
+    def delSeltIdx(self, idx: int) -> None:
+        """Deletes the IPs with `idx` index from the selection."""
+        try:
+            self._selection.remove(idx)
+        except ValueError:
+            return
+        self._mpCrLbl[_CR(0, idx + 1)].config(background=self._defaultClr)
+
+    def getSelection(self) -> tuple[int, ...]:
+        return tuple(self._selection)
