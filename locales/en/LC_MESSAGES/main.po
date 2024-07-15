@@ -131,9 +131,6 @@ msgstr "No URL to test the URL."
 msgid "UNABLE_SET_DNS"
 msgstr "Cannot set DNS servers to '{}'"
 
-msgid "BAD_DNS_NAME"
-msgstr "{} is a bad DNS name."
-
 msgid "X_CANCELED"
 msgstr "{} was canceled"
 
@@ -174,16 +171,31 @@ msgid "EMPTY_DNS_NAME"
 msgstr "DNS name cannot be empty."
 
 msgid "DUPLICATE_DNS_NAME"
-msgstr "'{}' already exists."
+msgstr "This name already exists."
 
-msgid "INVALID_PRIM_IP"
-msgstr "The primary IP is invalid."
+msgid "BAD_DNS_NAME"
+msgstr "The name is not a suitable DNS name."
 
-msgid "INVALID_SECON_IP"
-msgstr "The secondary IP is invalid."
+msgid "ALL_IPS_EMPTY"
+msgstr "At least one IP is necessary"
 
-msgid "EQUAL_PRIM_SECON"
-msgstr "The primary and secondary IPs are equal."
+msgid "SAME_IPV4"
+msgstr "The primary and secondary IPv4 addresses are equal."
+
+msgid "SAME_IPV6"
+msgstr "The primary and secondary IPv6 addresses are equal."
+
+msgid "BAD_PRIM_IP4"
+msgstr "The primary IPv4 is invalid."
+
+msgid "BAD_SECON_IP4"
+msgstr "The secondary IPv4 is invalid."
+
+msgid "BAD_PRIM_IP6"
+msgstr "The primary IPv6 is invalid."
+
+msgid "BAD_SECON_IP6"
+msgstr "The secondary IPv6 is invalid."
 
 msgid "NET_INT_DHCP"
 msgstr "This network resolves URLs through DHCP."

@@ -112,8 +112,8 @@ def dnsToSetIps(dns: DnsServer) -> set[IPv4]:
         {dns.primary, dns.secondary}
 
 
-def ipToStr(ip: IPv4 | None) -> str:
-    """Converts an optional IPv4 object to string."""
+def ipToStr(ip: IPv4 | IPv6 | None) -> str:
+    """Converts an optional IPv4 or IPv6 object to string."""
     return '' if ip is None else str(ip)
 
 

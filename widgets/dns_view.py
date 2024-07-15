@@ -58,7 +58,18 @@ class Dnsview(tksheet.Sheet):
             'right',
             'prior',
             'next',
+            'edit_cell',
             'column_width_resize',)
+        self.extra_bindings([
+            ("begin_edit_cell", self._onBeginEditCell),
+            ('row_select_enable', self._onBeginEditCell),])
+    
+    def _onBeginEditCell(self, event: tksheet.EventDataDict) -> None:
+        if self._cbDoubleClicked:
+            self._cbDoubleClicked()
+    
+    def getSelectedRow(self) -> int:
+        pass
     
     def getColsWidth(self) -> tuple[int, int, int, int, int]:
         """Returns the width of `name`, `prim_4`, and `secon_4`, 'prim_6',

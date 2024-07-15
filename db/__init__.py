@@ -20,16 +20,16 @@ class DnsServer:
     def __init__(
             self,
             name: str,
-            ips: Iterable[IPv4 | IPv6]
+            *ips: IPv4 | IPv6,
             ) -> None:
         """Initializes a new instance of `DnsServer`. Arguments are as
         follow:
 
         :param `name`: the name of the DNS server.
-        :param `ips`: a list of IPv4 and IPv6. This list must contain at
-        least one IP and up to two IPv4 and up to two IPv6 addresses,
-        otherwise `ValueError` will be raised. `TypeError` is raised if
-        there is at least one object of different type.
+        :param `ips`: a variable number of arguments of type IPv4 and IPv6.
+        This list must contain at least one IP and up to two IPv4 and up to
+        two IPv6 addresses, otherwise `ValueError` will be raised. `TypeError`
+        is raised if there is at least one object of different type.
         """
         self._name = name
         self._prim_4: IPv4 | None = None

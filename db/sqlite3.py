@@ -29,7 +29,7 @@ class SqliteDb(IDatabase):
             ips.append(IPv6(tpl[3]))
         if tpl[4] is not None:
             ips.append(IPv6(tpl[4]))
-        return  DnsServer(tpl[0], ips)
+        return  DnsServer(tpl[0], *ips)
 
     def _dnsToTuple(
             self,
