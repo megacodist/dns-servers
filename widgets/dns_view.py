@@ -110,7 +110,11 @@ class Dnsview(tksheet.Sheet):
                 new_dns.secon_6])
     
     def appendDns(self, dns: DnsServer) -> None:
-        self.insert_row(
+        eventDataDict = self.insert_row(
             [dns.name, dns.prim_4, dns.secon_4, dns.prim_6, dns.secon_6])
-        self._mpNameRow[dns.name] = idx
-        self.get_total_rows()
+        self._mpNameRow[dns.name] = eventDataDict['row']
+
+    def deleteName(self, dns_name: str) -> None:
+        rowIdx = self._mpNameRow[dns_name]
+        self.delete_row(rowIdx)
+        del self._mpNameRow[dns_name]

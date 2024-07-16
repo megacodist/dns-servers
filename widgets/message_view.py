@@ -90,7 +90,7 @@ class _MessageItem(tk.Canvas):
             justify=tk.LEFT)
         self._lbl_close = ttk.Label(
             self,
-            cursor='hand1',
+            cursor='hand2',
             image=self._IMG_CLOSE, # type: ignore
             width=self._imgSize)
         # Binding events...

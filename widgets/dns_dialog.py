@@ -67,6 +67,22 @@ class _IP_IDX(enum.IntEnum):
     SECON_6 = 3
 
 
+_mpIdxErr: dict[_IP_IDX, _DNS_ERRS] = {
+    _IP_IDX.PRIM_4: _DNS_ERRS.BAD_PRIM_4,
+    _IP_IDX.SECON_4: _DNS_ERRS.BAD_SECON_4,
+    _IP_IDX.PRIM_6: _DNS_ERRS.BAD_PRIM_6,
+    _IP_IDX.SECON_6: _DNS_ERRS.BAD_SECON_6,}
+"""The mapping between IP index enumeartions and DNS errors."""
+
+
+_mpIdxSame: dict[_IP_IDX, _DNS_ERRS] = {
+    _IP_IDX.PRIM_4: _DNS_ERRS.SAME_4,
+    _IP_IDX.SECON_4: _DNS_ERRS.SAME_4,
+    _IP_IDX.PRIM_6: _DNS_ERRS.SAME_6,
+    _IP_IDX.SECON_6: _DNS_ERRS.SAME_6,}
+"""The mapping between IP index and IPv4 or IPv6 equality."""
+
+
 class _LblIpSvar:
     def __init__(
             self,
@@ -366,6 +382,8 @@ class DnsDialog(tk.Toplevel):
         self._ipsData[idx].entry.icursor(tk.END)
         # Checking against empty IPs...
         if not text:
+            self._errs &= ~_mpIdxErr[idx]
+            self._errs &= ~_mpIdxSame[idx]
             if self._allIpsEmpty():
                 self._errs |= _DNS_ERRS.ALL_EMPTY
                 self._changeAllColors(self._errColor)
@@ -382,16 +400,13 @@ class DnsDialog(tk.Toplevel):
         if idx == _IP_IDX.PRIM_4 or idx == _IP_IDX.SECON_4:
             try:
                 self._ipsData[idx].ip = IPv4(text)
-                if idx == _IP_IDX.PRIM_4:
-                    self._errs &= ~_DNS_ERRS.BAD_PRIM_4
-                else:
-                    self._errs &= ~_DNS_ERRS.BAD_SECON_4
+                self._errs &= ~_mpIdxErr[idx]
             except AddressValueError:
                 self._ipsData[idx].ip = None
-                if idx == _IP_IDX.PRIM_4:
-                    self._errs |= _DNS_ERRS.BAD_PRIM_4
-                else:
-                    self._errs |= _DNS_ERRS.BAD_SECON_4
+                self._errs |= _mpIdxErr[idx]
+                if self._errs & _mpIdxSame[idx]:
+                    self._errs &= ~_mpIdxSame[idx]
+                    self._changeBothColor(idx, self._okColor)
                 self._changeColor(idx, self._errColor)
                 self._updateErrMsgOkBtn()
                 return True
@@ -400,46 +415,57 @@ class DnsDialog(tk.Toplevel):
                     _IP_IDX.SECON_4].ip and self._ipsData[_IP_IDX.PRIM_4].ip \
                     == self._ipsData[_IP_IDX.SECON_4].ip:
                 self._errs |= _DNS_ERRS.SAME_4
-                self._changeColor(idx, self._errColor)
+                self._changeBothColor(idx, self._errColor)
             else:
-                self._errs &= ~_DNS_ERRS.SAME_4
+                if self._errs & _DNS_ERRS.SAME_4:
+                    self._errs &= ~_DNS_ERRS.SAME_4
+                    self._changeBothColor(idx, self._okColor)
                 self._changeColor(idx, self._okColor)
             self._updateErrMsgOkBtn()
             return True
         # Checking against validity of IPv6...
         try:
             self._ipsData[idx].ip = IPv6(text)
-            if idx == _IP_IDX.PRIM_6:
-                self._errs &= ~_DNS_ERRS.BAD_PRIM_6
-            else:
-                self._errs &= ~_DNS_ERRS.BAD_SECON_6
+            self._errs &= ~_mpIdxErr[idx]
         except AddressValueError:
             self._ipsData[idx].ip = None
-            if idx == _IP_IDX.PRIM_6:
-                self._errs |= _DNS_ERRS.BAD_PRIM_6
-            else:
-                self._errs |= _DNS_ERRS.BAD_SECON_6
+            self._errs |= _mpIdxErr[idx]
+            if self._errs & _mpIdxSame[idx]:
+                self._errs &= ~_mpIdxSame[idx]
+                self._changeBothColor(idx, self._okColor)
             self._changeColor(idx, self._errColor)
             self._updateErrMsgOkBtn()
             return True
-        # Checking that IPv6 addresses are the same...
+        # Checking that IPv4 addresses are the same...
         if self._ipsData[_IP_IDX.PRIM_6].ip and self._ipsData[
                 _IP_IDX.SECON_6].ip and self._ipsData[_IP_IDX.PRIM_6].ip \
                 == self._ipsData[_IP_IDX.SECON_6].ip:
             self._errs |= _DNS_ERRS.SAME_6
-            self._changeColor(idx, self._errColor)
+            self._changeBothColor(idx, self._errColor)
         else:
-            self._errs &= ~_DNS_ERRS.SAME_6
+            if self._errs & _DNS_ERRS.SAME_6:
+                self._errs &= ~_DNS_ERRS.SAME_6
+                self._changeBothColor(idx, self._okColor)
             self._changeColor(idx, self._okColor)
         self._updateErrMsgOkBtn()
         return True
     
     def _allIpsEmpty(self) -> bool:
-        return all(self._ipsData[idx] for idx in self._ipsData.keys())
+        return not any(
+            self._ipsData[idx].svar.get()
+            for idx in self._ipsData.keys())
     
     def _changeAllColors(self, color: str) -> None:
         for ipIdx in self._ipsData.keys():
             self._ipsData[ipIdx].lbl.config(foreground=color)
+    
+    def _changeBothColor(self, idx: _IP_IDX, color: str) -> None:
+        if idx == _IP_IDX.PRIM_4 or idx == _IP_IDX.SECON_4:
+            self._ipsData[_IP_IDX.PRIM_4].lbl.config(foreground=color)
+            self._ipsData[_IP_IDX.SECON_4].lbl.config(foreground=color)
+        elif idx == _IP_IDX.PRIM_6 or idx == _IP_IDX.SECON_6:
+            self._ipsData[_IP_IDX.PRIM_6].lbl.config(foreground=color)
+            self._ipsData[_IP_IDX.SECON_6].lbl.config(foreground=color)
     
     def _changeColor(self, ip_idx: _IP_IDX, color: str) -> None:
         self._ipsData[ip_idx].lbl.config(foreground=color)

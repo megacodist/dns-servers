@@ -441,16 +441,17 @@ class DnsWin(tk.Tk):
     
     def _deleteDns(self) -> None:
         from tkinter.messagebox import askyesno
-        dnsName = self._dnsvw.getSetectedName()
-        if dnsName is None:
+        names = self._dnsvw.getSelectedNames()
+        if len(names) != 1:
             self._msgvw.AddMessage(
                 _('SELECT_ONE_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
+        dnsName = names[0]
         response = askyesno(message=_('CONFIRM_DEL_DNS').format(dnsName))
         if response is False:
             return
-        ipsSet = self._mpNameDns[dnsName].ipsToSet()
+        ipsSet = self._mpNameDns[dnsName].toSet()
         del self._mpNameDns[dnsName]
         del self._mpIpDns[ipsSet]
         self._db.deleteDns(dnsName)
