@@ -146,9 +146,6 @@ msgstr "Read DNS servers"
 msgid "READING_DNSES"
 msgstr "Reading DNS servers from the database"
 
-msgid "READING_DNS_INFO"
-msgstr "Reading DNS info"
-
 msgid "SETTING_DNS"
 msgstr "Setting DNS servers of '{}' to '{}'"
 
@@ -158,14 +155,14 @@ msgstr "Constructing data structures"
 msgid "ENTER_DNS"
 msgstr "Enter a DNS server"
 
-msgid "SELECT_ITEM_DNS_VIEW"
-msgstr "Select an item in the DNS servers."
+msgid "SELECT_ONE_ITEM_DNS_VIEW"
+msgstr "Select one and only one item in the DNS servers."
 
 msgid "SELECT_ITEM_INTER_VIEW"
 msgstr "Select an item in the Interfaces list."
 
 msgid "IPS_EXIST"
-msgstr "These IPv4 exist in '{}' DNS server."
+msgstr "These IPs exist in '{}' DNS server."
 
 msgid "EMPTY_DNS_NAME"
 msgstr "DNS name cannot be empty."

@@ -55,16 +55,6 @@ def listDnses(
     return mpNameDns, mpIpDns
 
 
-def readDnsInfo(
-        q: Queue[str] | None,
-        inter_name: str,
-        ) -> DnsInfo | Literal['DHCP']:
-    from ntwrk import readDnsInfo
-    if q:
-        q.put(_('READING_DNS_INFO'))
-    return readDnsInfo(inter_name)
-
-
 def setDns(
         q: Queue | None,
         net_int: str,

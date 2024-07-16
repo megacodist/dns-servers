@@ -341,17 +341,6 @@ class DnsWin(tk.Tk):
         self._lfrm_ips.config(text=self._netInts[idx].NetConnectionID)
         self._ipsvw.populate(self._netInts[idx], self._mpNameDns.values())
 
-    
-    def _onDnsInfoRead(self, fut: Future[DnsInfo | Literal['DHCP']]) -> None:
-        from utils.funcs import mergeMsgs
-        try:
-            res = fut.result()
-            self._populateDnsInfoPanel(res)
-        except CancelledError:
-            self._msgvw.AddMessage(
-                _('X_CANCELED').format(_('READING_DNS_INFO')),
-                type_=MessageType.INFO,)
-    
     def _readNetInts(self) -> None:
         """Reads network interfaces."""
         from utils.funcs import readNetInts
@@ -410,7 +399,7 @@ class DnsWin(tk.Tk):
         dnsName = self._dnsvw.getSetectedName()
         if dnsName is None:
             self._msgvw.AddMessage(
-                _('SELECT_ITEM_DNS_VIEW'),
+                _('SELECT_ONE_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
         #
@@ -438,7 +427,7 @@ class DnsWin(tk.Tk):
         if dns is None:
             return
         # Checking that IPs already exist...
-        ipsSet = dns.ipsToSet()
+        ipsSet = dns.toSet()
         if ipsSet in self._mpIpDns:
             self._msgvw.AddMessage(
                 _('IPS_EXIST').format(self._mpIpDns[ipsSet].name),
@@ -455,7 +444,7 @@ class DnsWin(tk.Tk):
         dnsName = self._dnsvw.getSetectedName()
         if dnsName is None:
             self._msgvw.AddMessage(
-                _('SELECT_ITEM_DNS_VIEW'),
+                _('SELECT_ONE_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
         response = askyesno(message=_('CONFIRM_DEL_DNS').format(dnsName))
@@ -470,13 +459,14 @@ class DnsWin(tk.Tk):
     def _editDns(self) -> None:
         from .dns_dialog import DnsDialog
         from utils.funcs import mergeMsgs
-        dnsName = self._dnsvw.getSetectedName()
-        if dnsName is None:
+        names = self._dnsvw.getSelectedNames()
+        if len(names) != 1:
             self._msgvw.AddMessage(
-                _('SELECT_ITEM_DNS_VIEW'),
+                _('SELECT_ONE_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
-        dnsIps = self._mpNameDns[dnsName].ipsToSet()
+        dnsName = names[0]
+        dnsIps = self._mpNameDns[dnsName].toSet()
         cpyNameDns = self._mpNameDns.copy()
         del cpyNameDns[dnsName]
         dnsDialog = DnsDialog(self, cpyNameDns, self._mpNameDns[dnsName])
@@ -485,40 +475,20 @@ class DnsWin(tk.Tk):
             # No change, doing nothing...
             return
         # Checking existence of IPs...
-        if newDns.ipsToSet() in cpyNameDns:
+        if newDns.toSet() in cpyNameDns:
             self._msgvw.AddMessage(
-                _('IPS_EXIST').format(self._mpIpDns[newDns.ipsToSet()].name),
+                _('IPS_EXIST').format(self._mpIpDns[newDns.toSet()].name),
                 type_=MessageType.ERROR)
             return
         # Applying change...
         self._mpNameDns[newDns.name] = newDns
         if newDns.name != dnsName:
             del self._mpNameDns[dnsName]
-        self._mpIpDns[newDns.ipsToSet()] = newDns
-        if newDns.ipsToSet() != dnsIps:
+        self._mpIpDns[newDns.toSet()] = newDns
+        if newDns.toSet() != dnsIps:
             del self._mpIpDns[dnsIps]
         self._dnsvw.changeDns(dnsName, newDns)
         self._db.updateDns(dnsName, newDns)
-    
-    def _populateDnsInfoPanel(self, dns: DnsInfo | Literal['DHCP']) -> None:
-        from utils.funcs import ipToStr
-        logging.debug(dns)
-        if dns is 'DHCP':
-            self._entry_primary.insert(0, '')
-            self._entry_secondary.insert(0, '')
-            self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
-            self._msg_dnsName.config(text='DHCP')
-        elif isinstance(dns, DnsInfo):
-            self._entry_primary.insert(0, ipToStr(dns.primary))
-            self._entry_secondary.insert(0, ipToStr(dns.secondary))
-            try:
-                name = self._mpIpDns[dns.ipsToSet()].name
-            except KeyError:
-                name = ''
-            self._msg_dnsName.config(width=self._msg_dnsName.winfo_width())
-            self._msg_dnsName.config(text=name)
-        else:
-            logging.error('E3', dns)
     
     def _testUrl(self) -> None:
         # Reading network interface name...

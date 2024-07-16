@@ -71,10 +71,12 @@ class _LblIpSvar:
     def __init__(
             self,
             lbl: ttk.Label,
+            entry: ttk.Entry,
             ip: IPv4 | IPv6 | None,
             svar: tk.StringVar,
             ) -> None:
         self.lbl = lbl
+        self.entry = entry
         self.ip = ip
         self.svar = svar
 
@@ -103,6 +105,7 @@ class DnsDialog(tk.Toplevel):
         """The gathered DNS server information. If dialog is canceled, it
         will be `None`."""
         self._errs = _DNS_ERRS.OK
+        self._mpNameDns = mp_name_dns
         # Initializing StringVars...
         if dns is None:
             self._svarName = tk.StringVar(self, '')
@@ -110,13 +113,13 @@ class DnsDialog(tk.Toplevel):
             self._svarSecod4 = tk.StringVar(self, '')
             self._svarPrim6 = tk.StringVar(self, '')
             self._svarSecon6 = tk.StringVar(self, '')
-            self._mpNameDns = mp_name_dns
         elif isinstance(dns, DnsServer):
             self._svarName = tk.StringVar(self, dns.name)
             self._svarPrim4 = tk.StringVar(self, ipToStr(dns.prim_4))
             self._svarSecod4 = tk.StringVar(self, ipToStr(dns.secon_4))
             self._svarPrim6 = tk.StringVar(self, ipToStr(dns.prim_6))
             self._svarSecon6 = tk.StringVar(self, ipToStr(dns.secon_6))
+            self._mpNameDns = mp_name_dns.copy()
         else:
             raise TypeError("'dns' argument of the initializer of "
                 f"{self.__class__.__qualname__} must be either None "
@@ -127,18 +130,22 @@ class DnsDialog(tk.Toplevel):
         self._ipsData: dict[_IP_IDX, _LblIpSvar] = {
             _IP_IDX.PRIM_4: _LblIpSvar(
                 self._lbl_prim_4,
+                self._entry_prim_4,
                 None if dns is None else dns.prim_4,
                 self._svarPrim4,),
             _IP_IDX.SECON_4: _LblIpSvar(
                 self._lbl_secon_4,
+                self._entry_secon_4,
                 None if dns is None else dns.secon_4,
                 self._svarSecod4,),
             _IP_IDX.PRIM_6: _LblIpSvar(
                 self._lbl_prim_6,
+                self._entry_prim_6,
                 None if dns is None else dns.prim_6,
                 self._svarPrim6),
             _IP_IDX.SECON_6: _LblIpSvar(
                 self._lbl_secon_6,
+                self._entry_secon_6,
                 None if dns is None else dns.secon_6,
                 self._svarSecon6),}
         self._validateInitials()
@@ -176,8 +183,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._lbl_name = ttk.Label(
             self._frm_container,
-            text=_('NAME') + ':',
-            foreground=self._errColor)
+            text=_('NAME') + ':',)
         self._lbl_name.grid(row=0, column=0, padx=2, pady=2, sticky=tk.E)
         #
         self._entry_name = ttk.Entry(
@@ -189,8 +195,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._lbl_prim_4 = ttk.Label(
             self._frm_container,
-            text=_('primary') + ' IPv4:',
-            foreground=self._errColor)
+            text=_('PRIM_4') + ':',)
         self._lbl_prim_4.grid(row=1, column=0, padx=2, pady=2, sticky=tk.E)
         #
         self._entry_prim_4 = ttk.Entry(
@@ -209,8 +214,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._lbl_secon_4 = ttk.Label(
             self._frm_container,
-            text=_('SECONDARY') + ' IPv4:',
-            foreground=self._okColor)
+            text=_('SECON_4') + ':',)
         self._lbl_secon_4.grid(row=2, column=0, padx=2, pady=2, sticky=tk.E)
         #
         self._entry_secon_4 = ttk.Entry(
@@ -229,8 +233,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._lbl_prim_6 = ttk.Label(
             self._frm_container,
-            text=_('primary') + ' IPv6:',
-            foreground=self._errColor)
+            text=_('PRIM_6') + ':',)
         self._lbl_prim_6.grid(row=3, column=0, padx=2, pady=2, sticky=tk.E)
         #
         self._entry_prim_6 = ttk.Entry(
@@ -249,8 +252,7 @@ class DnsDialog(tk.Toplevel):
         #
         self._lbl_secon_6 = ttk.Label(
             self._frm_container,
-            text=_('SECONDARY') + ' IPv4:',
-            foreground=self._okColor)
+            text=_('SECON_6') + ':',)
         self._lbl_secon_6.grid(row=4, column=0, padx=2, pady=2, sticky=tk.E)
         #
         self._entry_secon_6 = ttk.Entry(
@@ -331,15 +333,19 @@ class DnsDialog(tk.Toplevel):
     def _validateName(self, text: str) -> bool:
         text = text.strip()
         self._svarName.set(text)
+        self._entry_name.icursor(tk.END)
         if not text:
             # Reporting empty name error...
             self._errs |= _DNS_ERRS.NO_NAME
+            self._errs &= (~_DNS_ERRS.BAD_NAME)
+            self._errs &= (~_DNS_ERRS.DUP_NAME)
             self._lbl_name.config(foreground=self._errColor)
         else:
             self._errs &= (~_DNS_ERRS.NO_NAME)
             if text.lower() in BAD_DNS_NAMES:
                 # Reporting bad DNS name error...
                 self._errs |= _DNS_ERRS.BAD_NAME
+                self._errs &= (~_DNS_ERRS.DUP_NAME)
                 self._lbl_name.config(foreground=self._errColor)
             else:
                 self._errs &= (~_DNS_ERRS.BAD_NAME)
@@ -357,6 +363,7 @@ class DnsDialog(tk.Toplevel):
     def _validateIp(self, text: str, idx: _IP_IDX) -> bool:
         text = text.strip()
         self._ipsData[idx].svar.set(text)
+        self._ipsData[idx].entry.icursor(tk.END)
         # Checking against empty IPs...
         if not text:
             if self._allIpsEmpty():
