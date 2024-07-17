@@ -396,26 +396,6 @@ class DnsWin(tk.Tk):
                 type_=MessageType.WARNING)
             return
         return self._netInts[interIdx]['Name'] # type: ignore
-    
-    def _applyDns(self) -> None:
-        # Getting interface...
-        interName = self._getNetInt()
-        if interName is None:
-            return
-        # Getting DNS...
-        dnsName = self._dnsvw.getSetectedName()
-        if dnsName is None:
-            self._msgvw.AddMessage(
-                _('SELECT_ONE_ITEM_DNS_VIEW'),
-                type_=MessageType.WARNING)
-            return
-        #
-        from utils.funcs import setDns
-        self._asyncMngr.InitiateOp(
-            start_cb=setDns,
-            start_args=(interName, self._mpNameDns[dnsName]),
-            finish_cb=self._onDnsApplied,
-            widgets=(self._lfrm_dnsInfo,))
 
     def _onDnsApplied(self, fut: Future[None]) -> None:
         try:

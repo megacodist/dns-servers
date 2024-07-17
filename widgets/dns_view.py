@@ -71,7 +71,7 @@ class Dnsview(tksheet.Sheet):
     
     def _onBeginEditCell(self, event: tksheet.EventDataDict) -> None:
         if self._cbDoubleClicked:
-            self._cbDoubleClicked()
+            self.after(10, self._cbDoubleClicked)
     
     def getSelectedNames(self) -> tuple[str, ...]:
         """Gets the names of the DNS servers that have selection."""

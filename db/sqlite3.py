@@ -17,7 +17,8 @@ class SqliteDb(IDatabase):
     
     def _tupleToDns(
             self,
-            tpl: tuple[str, int | None, int | None, int | None, int | None],
+            tpl: tuple[str, int | None, int | None, bytes | None,
+                bytes | None],
             ) -> DnsServer:
         """Converts a 5-tuple into a `DnsServer` object."""
         ips = list[IPv4 | IPv6]()
@@ -34,7 +35,8 @@ class SqliteDb(IDatabase):
     def _dnsToTuple(
             self,
             dns: DnsServer,
-            ) -> tuple[str, int | None, int | None, int | None, int | None]:
+            ) -> tuple[str, int | None, int | None, bytes | None,
+                bytes | None]:
         """Converts the `DnsServer` object into a 5-tuple compatible with
         the database.
         """
@@ -42,8 +44,8 @@ class SqliteDb(IDatabase):
             dns.name,
             None if dns.prim_4 is None else int(dns.prim_4),
             None if dns.secon_4 is None else int(dns.secon_4),
-            None if dns.prim_6 is None else int(dns.prim_6),
-            None if dns.secon_6 is None else int(dns.secon_6),)
+            None if dns.prim_6 is None else dns.prim_6.packed,
+            None if dns.secon_6 is None else dns.secon_6.packed,)
     
     def close(self) -> None:
         """Closes the database."""
@@ -121,4 +123,5 @@ class SqliteDb(IDatabase):
         """
         cur = self._conn.cursor()
         cur = cur.execute(sql, (*self._dnsToTuple(new_dns), old_name,))
+        cur.close()
         self._conn.commit()
