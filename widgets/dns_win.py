@@ -166,6 +166,19 @@ class DnsWin(tk.Tk):
         self._lfrm_ips.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         self._pwin_netIntIps.add(self._lfrm_ips, weight=1)
         #
+        self._frm_ipsTlbr = ttk.Frame(self._lfrm_ips)
+        self._frm_ipsTlbr.pack(fill=tk.X, expand=True)
+        #
+        self._btn_addIps = ttk.Button(
+            self._frm_ipsTlbr,
+            image=self._IMG_ADD) # type: ignore
+        self._btn_addIps.pack(side=tk.LEFT)
+        #
+        self._btn_deletIps = ttk.Button(
+            self._frm_ipsTlbr,
+            image=self._IMG_REMOVE) # type: ignore
+        self._btn_deletIps.pack(side=tk.LEFT)
+        #
         self._ipsvw = IpsView(self._lfrm_ips)
         self._ipsvw.pack(fill=tk.BOTH, expand=True)
         # Right PanedWindow (upper and lower)
@@ -200,8 +213,8 @@ class DnsWin(tk.Tk):
         self._lfrm_dnses.pack(fill=tk.BOTH, expand=True)
         self._pwin_dnses.add(self._lfrm_dnses, weight=1)
         #
-        self._frm_dnsButns = tk.Frame(self._lfrm_dnses)
-        self._frm_dnsButns.grid(
+        self._frm_dnsTlbr = tk.Frame(self._lfrm_dnses)
+        self._frm_dnsTlbr.grid(
             column=0,
             row=0,
             padx=4,
@@ -209,28 +222,22 @@ class DnsWin(tk.Tk):
             sticky=tk.NSEW,)
         #
         self._btn_addDns = ttk.Button(
-            self._frm_dnsButns,
+            self._frm_dnsTlbr,
             command=self._addDns,
             image=self._IMG_ADD) # type: ignore
         self._btn_addDns.pack(side=tk.LEFT)
         #
         self._btn_deleteDns = ttk.Button(
-            self._frm_dnsButns,
+            self._frm_dnsTlbr,
             command=self._deleteDns,
             image=self._IMG_REMOVE) # type: ignore
         self._btn_deleteDns.pack(side=tk.LEFT)
         #
         self._btn_editDns = ttk.Button(
-            self._frm_dnsButns,
+            self._frm_dnsTlbr,
             command=self._editDns,
             image=self._IMG_EDIT) # type: ignore
         self._btn_editDns.pack(side=tk.LEFT)
-        #
-        self._btn_applyDns = ttk.Button(
-            self._frm_dnsButns,
-            command=self._applyDns,
-            image=self._IMG_APPLY) # type: ignore
-        self._btn_applyDns.pack(side=tk.LEFT)
         #
         self._dnsvw = Dnsview(
             self._lfrm_dnses,
