@@ -43,8 +43,7 @@ def readNetInts(q: Queue[str] | None) -> list[NetInt]:
 def listDnses(
         q: Queue[str] | None,
         db: IDatabase,
-        ) -> tuple[dict[str, DnsServer], dict[
-            frozenset[IPv4 | IPv6], DnsServer]]:
+        ) -> tuple[dict[str, DnsServer], dict[IPv4 | IPv6, DnsServer]]:
     if q:
         q.put(_('READING_DNSES'))
     dnses = db.selctAllDnses()

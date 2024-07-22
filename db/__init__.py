@@ -97,7 +97,7 @@ class DnsServer:
             None,
             (self._prim_4, self._secon_4, self._prim_6, self._secon_6)))
     
-    def toTuple(self) -> tuple[IPv4 | IPv6, ...]:
+    def toIpTuple(self) -> tuple[IPv4 | IPv6, ...]:
         return tuple(filter(
             None,
             (self._prim_4, self._secon_4, self._prim_6, self._secon_6)))

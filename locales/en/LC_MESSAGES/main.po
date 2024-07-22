@@ -156,7 +156,7 @@ msgid "ENTER_DNS"
 msgstr "Enter a DNS server"
 
 msgid "SELECT_ONE_ITEM_DNS_VIEW"
-msgstr "Select one and only one item in the DNS servers."
+msgstr "Select one and only one row in the DNS servers."
 
 msgid "SELECT_ITEM_INTER_VIEW"
 msgstr "Select an item in the Interfaces list."
