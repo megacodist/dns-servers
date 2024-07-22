@@ -54,7 +54,7 @@ class DnsWin(tk.Tk):
         self._netInts: list[NetInt]
         """A list of all network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
-        self._mpIpDns: dict[frozenset[IPv4 | IPv6], DnsServer]
+        self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
         # Images...
         self._GIF_WAIT: GifImage
         self._GIF_DWAIT: GifImage
@@ -375,7 +375,7 @@ class DnsWin(tk.Tk):
     def _onDnsesRead(
             self,
             fut: Future[tuple[dict[str, DnsServer], dict[
-                frozenset[IPv4 | IPv6], DnsServer]]],
+                IPv4 | IPv6, DnsServer]]],
             ) -> None:
         try:
             self._mpNameDns, self._mpIpDns = fut.result()
@@ -409,7 +409,7 @@ class DnsWin(tk.Tk):
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
-        dnsDialog = DnsDialog(self, self._mpNameDns)
+        dnsDialog = DnsDialog(self, self._mpNameDns, self._mpIpDns)
         dns = dnsDialog.showDialog()
         if dns is None:
             return

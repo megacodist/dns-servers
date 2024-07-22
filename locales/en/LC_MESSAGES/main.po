@@ -182,17 +182,11 @@ msgstr "The primary and secondary IPv4 addresses are equal."
 msgid "SAME_IPV6"
 msgstr "The primary and secondary IPv6 addresses are equal."
 
-msgid "BAD_PRIM_IP4"
-msgstr "The primary IPv4 is invalid."
+msgid "BAD_DNS_IP"
+msgstr "The {} is invalid."
 
-msgid "BAD_SECON_IP4"
-msgstr "The secondary IPv4 is invalid."
-
-msgid "BAD_PRIM_IP6"
-msgstr "The primary IPv6 is invalid."
-
-msgid "BAD_SECON_IP6"
-msgstr "The secondary IPv6 is invalid."
+msgid "DUP_DNS_IP"
+msgstr "The {} address already exists in {}."
 
 msgid "NET_INT_DHCP"
 msgstr "This network resolves URLs through DHCP."

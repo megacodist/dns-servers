@@ -50,7 +50,7 @@ def listDnses(
     if q:
         q.put(_('CONSTRUCTING_DATA'))
     mpNameDns = {dns.name:dns for dns in dnses}
-    mpIpDns = {dns.toSet():dns for dns in dnses}
+    mpIpDns = {ip:dns for dns in dnses for ip in dns.toSet()}
     return mpNameDns, mpIpDns
 
 
