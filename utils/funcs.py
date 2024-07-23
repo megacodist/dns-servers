@@ -93,14 +93,6 @@ def setDns(
         raise OpFailedError('cannot set DNS servers as expected')
 
 
-def dnsToSetIps(dns: DnsServer) -> set[IPv4]:
-    """Converts a `DnsServer` object into a set of one or two IPv4
-    objects.
-    """
-    return {dns.primary} if dns.secondary is None else \
-        {dns.primary, dns.secondary}
-
-
 def ipToStr(ip: IPv4 | IPv6 | None) -> str:
     """Converts an optional IPv4 or IPv6 object to string."""
     return '' if ip is None else str(ip)

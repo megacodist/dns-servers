@@ -41,6 +41,12 @@ msgstr "Quit"
 msgid "CMDS"
 msgstr "Commands"
 
+msgid "IPV4"
+msgstr "IPv4"
+
+msgid "IPV6"
+msgstr "IPv6"
+
 msgid "PRIMARY"
 msgstr "Primary"
 
@@ -91,6 +97,12 @@ msgstr "DNS servers"
 
 msgid "NET_INTS"
 msgstr "Network interfaces"
+
+msgid "NET_INT_INFO"
+msgstr "Network interface information"
+
+msgid "SHOW_NET_INT_INFO"
+msgstr "Show interface info"
 
 msgid "CLEAR_MSGS"
 msgstr "Clear messages"
@@ -161,9 +173,6 @@ msgstr "Select one and only one row in the DNS servers."
 msgid "SELECT_ITEM_INTER_VIEW"
 msgstr "Select an item in the Interfaces list."
 
-msgid "IPS_EXIST"
-msgstr "These IPs exist in '{}' DNS server."
-
 msgid "EMPTY_DNS_NAME"
 msgstr "DNS name cannot be empty."
 
@@ -176,11 +185,8 @@ msgstr "The name is not a suitable DNS name."
 msgid "ALL_IPS_EMPTY"
 msgstr "At least one IP is necessary"
 
-msgid "SAME_IPV4"
-msgstr "The primary and secondary IPv4 addresses are equal."
-
-msgid "SAME_IPV6"
-msgstr "The primary and secondary IPv6 addresses are equal."
+msgid "SAME_PRIM_SECON"
+msgstr "The primary and secondary {} addresses are equal."
 
 msgid "BAD_DNS_IP"
 msgstr "The {} is invalid."

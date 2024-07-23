@@ -22,36 +22,6 @@ BAD_DNS_NAMES = ['arp', 'bgp', 'cifs', 'dhcp', 'firewall', 'ftp', 'gateway',
     'subnet', 'switch', 'tcp', 'telnet', 'tls', 'udp', 'vlan', 'vnc', 'vpn']
 
 
-'''class _DNS_ERRS(enum.IntFlag):
-    OK = 0x000
-    """Indicates that there is no error."""
-    ALL_EMPTY = 0x001
-    """Indicates that all IP fields are empty."""
-    SAME_4 = 0x002
-    """Indicates that both IPv4 addresses are the same."""
-    SAME_6 = 0x004
-    """Indicates that both IPv6 addresses are the same."""
-    BAD_PRIM_4 = 0x008
-    """Indicates that primary IPv4 address is not valid."""
-    BAD_SECON_4 = 0x010
-    """Indicates that secondary IPv4 address is not valid."""
-    BAD_PRIM_6 = 0x020
-    """Indicates that primary IPv6 address is not valid."""
-    BAD_SECON_6 = 0x040
-    """Indicates that secondary IPv6 address is not valid."""
-    NO_NAME = 0x080
-    """Indicates that no name is provided for the DNS server."""
-    DUP_NAME = 0x100
-    """Indicates that the name is already exists."""
-    BAD_NAME = 0x200
-    """Indicates that the name is not acceptable."""'''
-
-
-class _IpVer(enum.IntEnum):
-    V4 = 0
-    V6 = 1
-
-
 class _DnsNameErrs(enum.IntEnum):
     OK = 0
     NO_NAME = 1
@@ -62,6 +32,11 @@ class _DnsNameErrs(enum.IntEnum):
     """Indicates that the name is not acceptable."""
 
 
+class _IpVer(enum.IntEnum):
+    V4 = 0
+    V6 = 1
+
+
 _mpRoleMoid: dict[IPRole, str] = {
     IPRole.PRIM_4: 'PRIM_4',
     IPRole.SECON_4: 'SECON_4',
@@ -70,10 +45,23 @@ _mpRoleMoid: dict[IPRole, str] = {
 """The mapping between `IPRole` objects and corresponding ID in MO files."""
 
 
+_mpVerMoid: dict[_IpVer, str] = {
+    _IpVer.V4: 'IPV4',
+    _IpVer.V6: 'IPV6',}
+
+
+_mpRoleVer: dict[IPRole, _IpVer] = {
+    IPRole.PRIM_4: _IpVer.V4,
+    IPRole.SECON_4: _IpVer.V4,
+    IPRole.PRIM_6: _IpVer.V6,
+    IPRole.SECON_6: _IpVer.V6,}
+"""The mapping between IP role and the version of IP protocol."""
+
+
 class _DnsErrs:
     def __init__(self) -> None:
         self.noIp = False
-        self.sameVs = set[_IpVer]()
+        self.sameVers = set[_IpVer]()
         self.badIps = set[IPRole]()
         self.dupIps = set[IPRole]()
         self.nameErr = _DnsNameErrs.OK
@@ -83,35 +71,6 @@ _NAME_MSGS: dict[_DnsNameErrs, str] = {
     _DnsNameErrs.NO_NAME: _('EMPTY_DNS_NAME'),
     _DnsNameErrs.DUP_NAME: _('DUPLICATE_DNS_NAME'),
     _DnsNameErrs.BAD_NAME: _('BAD_DNS_NAME'),}
-
-
-_ERR_MSGS: dict[_DNS_ERRS, str] = {
-    _DNS_ERRS.ALL_EMPTY: _('ALL_IPS_EMPTY'),
-    _DNS_ERRS.SAME_4: _('SAME_IPV4'),
-    _DNS_ERRS.SAME_6: _('SAME_IPV6'),
-    _DNS_ERRS.BAD_PRIM_4: _('BAD_PRIM_IP4'),
-    _DNS_ERRS.BAD_SECON_4: _('BAD_SECON_IP4'),
-    _DNS_ERRS.BAD_PRIM_6: _('BAD_PRIM_IP6'),
-    _DNS_ERRS.BAD_SECON_6: _('BAD_SECON_IP6'),
-    _DNS_ERRS.NO_NAME: _('EMPTY_DNS_NAME'),
-    _DNS_ERRS.DUP_NAME: _('DUPLICATE_DNS_NAME'),
-    _DNS_ERRS.BAD_NAME: _('BAD_DNS_NAME'),}
-
-
-_mpIdxErr: dict[IPRole, _DNS_ERRS] = {
-    IPRole.PRIM_4: _DNS_ERRS.BAD_PRIM_4,
-    IPRole.SECON_4: _DNS_ERRS.BAD_SECON_4,
-    IPRole.PRIM_6: _DNS_ERRS.BAD_PRIM_6,
-    IPRole.SECON_6: _DNS_ERRS.BAD_SECON_6,}
-"""The mapping between IP index enumeartions and DNS errors."""
-
-
-_mpRoleVer: dict[IPRole, _DNS_ERRS] = {
-    IPRole.PRIM_4: _DNS_ERRS.SAME_4,
-    IPRole.SECON_4: _DNS_ERRS.SAME_4,
-    IPRole.PRIM_6: _DNS_ERRS.SAME_6,
-    IPRole.SECON_6: _DNS_ERRS.SAME_6,}
-"""The mapping between IP index and IPv4 or IPv6 equality."""
 
 
 class _LblIpSvar:
@@ -136,6 +95,17 @@ class DnsDialog(tk.Toplevel):
             mp_ip_dns: dict[IPv4 | IPv6, DnsServer],
             dns: DnsServer | None = None,
             ) -> None:
+        """A dialog to ask user for a new DNS server or change one. Arguments
+        are as follow:
+        * `mp_name_dns`: the mapping between available DNS names and their
+        objects. The user provided name must not exist in the keys of this
+        argument.
+        * `mp_ip_dns`: the mapping between available DNS IPs and their
+        objects. The user provided IPs must not exist in the keys of this
+        argument.
+        * `dns`: the DNS server object to change. If it is `None`, asks
+        the user for a new DNS.
+        """
         super().__init__(master)
         self.title(_('ENTER_DNS'))
         self.resizable(False, False)
@@ -168,7 +138,6 @@ class DnsDialog(tk.Toplevel):
             self._svarSecod4 = tk.StringVar(self, ipToStr(dns.secon_4))
             self._svarPrim6 = tk.StringVar(self, ipToStr(dns.prim_6))
             self._svarSecon6 = tk.StringVar(self, ipToStr(dns.secon_6))
-            self._mpNameDns = mp_name_dns.copy()
         else:
             raise TypeError("'dns' argument of the initializer of "
                 f"{self.__class__.__qualname__} must be either None "
@@ -216,7 +185,7 @@ class DnsDialog(tk.Toplevel):
             None,
             [self._ipsData[idx].ip for idx in self._ipsData.keys()])
         self._result = DnsServer(
-            self._svarName.get(),
+            self._svarName.get().strip(),
             *list(ips))
         self.destroy()
 
@@ -252,7 +221,7 @@ class DnsDialog(tk.Toplevel):
             textvariable=self._svarPrim4,
             validate='key',
             validatecommand=(self.register(
-                partial(self._validateIp, idx=IPRole.PRIM_4)),
+                partial(self._validateIp, role=IPRole.PRIM_4)),
                 '%P'))
         self._entry_prim_4.grid(
             row=1,
@@ -271,7 +240,7 @@ class DnsDialog(tk.Toplevel):
             textvariable=self._svarSecod4,
             validate='key',
             validatecommand=(self.register(
-                partial(self._validateIp, idx=IPRole.SECON_4)),
+                partial(self._validateIp, role=IPRole.SECON_4)),
                 '%P'))
         self._entry_secon_4.grid(
             row=2,
@@ -290,7 +259,7 @@ class DnsDialog(tk.Toplevel):
             textvariable=self._svarPrim6,
             validate='key',
             validatecommand=(self.register(
-                partial(self._validateIp, idx=IPRole.PRIM_6)),
+                partial(self._validateIp, role=IPRole.PRIM_6)),
                 '%P'))
         self._entry_prim_6.grid(
             row=3,
@@ -309,7 +278,7 @@ class DnsDialog(tk.Toplevel):
             textvariable=self._svarSecon6,
             validate='key',
             validatecommand=(self.register(
-                partial(self._validateIp, idx=IPRole.SECON_6)),
+                partial(self._validateIp, role=IPRole.SECON_6)),
                 '%P'))
         self._entry_secon_6.grid(
             row=4,
@@ -376,13 +345,11 @@ class DnsDialog(tk.Toplevel):
     
     def _validateInitials(self) -> None:
         self._validateName(self._svarName.get())
-        for ipIdx in self._ipsData.keys():
-            self._validateIp(self._ipsData[ipIdx].svar.get(), ipIdx)
+        for role in self._ipsData.keys():
+            self._validateIp(self._ipsData[role].svar.get(), role)
     
     def _validateName(self, text: str) -> bool:
         text = text.strip()
-        self._svarName.set(text)
-        self._entry_name.icursor(tk.END)
         if not text:
             # Reporting empty name error...
             self._errs.nameErr = _DnsNameErrs.NO_NAME
@@ -402,77 +369,78 @@ class DnsDialog(tk.Toplevel):
         self._updateErrMsgOkBtn()
         return True
     
-    def _validateIp(self, text: str, idx: IPRole) -> bool:
+    def _validateIp(self, text: str, role: IPRole) -> bool:
         text = text.strip()
-        self._ipsData[idx].svar.set(text)
-        self._ipsData[idx].entry.icursor(tk.END)
         # Checking against empty IPs...
         if not text:
-            self._errs &= ~_mpIdxErr[idx]
-            self._errs &= ~_mpRoleVer[idx]
             if self._allIpsEmpty():
-                self._errs |= _DNS_ERRS.ALL_EMPTY
+                self._errs.noIp = True
                 self._changeAllColors(self._errColor)
+                # Clearing other IP-related errors...
+                self._errs.sameVers.clear()
+                self._errs.badIps.clear()
+                self._errs.dupIps.clear()
             else:
-                self._errs &= ~_DNS_ERRS.ALL_EMPTY
-                self._changeColor(idx, self._okColor)
+                self._changeColor(role, self._okColor)
+                # Clearing other IP-related errors for this IP...
+                try:
+                    self._errs.sameVers.remove(_mpRoleVer[role])
+                except KeyError:
+                    pass
+                try:
+                    self._errs.badIps.remove(role)
+                except KeyError:
+                    pass
+                try:
+                    self._errs.dupIps.remove(role)
+                except KeyError:
+                    pass
             self._updateErrMsgOkBtn()
             return True
         # Checking against comming out of `ALL_EMPTY` state...
-        if self._errs & _DNS_ERRS.ALL_EMPTY:
-            self._errs &= ~_DNS_ERRS.ALL_EMPTY
+        if self._errs.noIp:
+            self._errs.noIp = False
             self._changeAllColors(self._okColor)
-        # Checking against validity of IPv4...
-        if idx == IPRole.PRIM_4 or idx == IPRole.SECON_4:
+        #
+        try:
+            self._ipsData[role].ip = IPv4(text)
             try:
-                self._ipsData[idx].ip = IPv4(text)
-                self._errs &= ~_mpIdxErr[idx]
+                self._errs.badIps.remove(role)
+            except KeyError:
+                pass
+        except AddressValueError:
+            try:
+                self._ipsData[role].ip = IPv6(text)
+                try:
+                    self._errs.badIps.remove(role)
+                except KeyError:
+                    pass
             except AddressValueError:
-                self._ipsData[idx].ip = None
-                self._errs |= _mpIdxErr[idx]
-                if self._errs & _mpRoleVer[idx]:
-                    self._errs &= ~_mpRoleVer[idx]
-                    self._changeBothColor(idx, self._okColor)
-                self._changeColor(idx, self._errColor)
+                self._ipsData[role].ip = None
+                self._errs.badIps.add(role)
+                if _mpRoleVer[role] in self._errs.sameVers:
+                    self._errs.sameVers.remove(_mpRoleVer[role])
+                    self._chnagePeerColor(role, self._okColor)
+                if role in self._errs.dupIps:
+                    self._errs.dupIps.remove(role)
+                self._changeColor(role, self._errColor)
                 self._updateErrMsgOkBtn()
                 return True
-            # Checking that IPv4 addresses are the same...
-            if self._ipsData[IPRole.PRIM_4].ip and self._ipsData[
-                    IPRole.SECON_4].ip and self._ipsData[IPRole.PRIM_4].ip \
-                    == self._ipsData[IPRole.SECON_4].ip:
-                self._errs |= _DNS_ERRS.SAME_4
-                self._changeBothColor(idx, self._errColor)
-            else:
-                if self._errs & _DNS_ERRS.SAME_4:
-                    self._errs &= ~_DNS_ERRS.SAME_4
-                    self._changeBothColor(idx, self._okColor)
-                self._changeColor(idx, self._okColor)
-            self._updateErrMsgOkBtn()
-            return True
-        # Checking against validity of IPv6...
-        try:
-            self._ipsData[idx].ip = IPv6(text)
-            self._errs &= ~_mpIdxErr[idx]
-        except AddressValueError:
-            self._ipsData[idx].ip = None
-            self._errs |= _mpIdxErr[idx]
-            if self._errs & _mpRoleVer[idx]:
-                self._errs &= ~_mpRoleVer[idx]
-                self._changeBothColor(idx, self._okColor)
-            self._changeColor(idx, self._errColor)
-            self._updateErrMsgOkBtn()
-            return True
-        # Checking that IPv4 addresses are the same...
-        if self._ipsData[IPRole.PRIM_6].ip and self._ipsData[
-                IPRole.SECON_6].ip and self._ipsData[IPRole.PRIM_6].ip \
-                == self._ipsData[IPRole.SECON_6].ip:
-            self._errs |= _DNS_ERRS.SAME_6
-            self._changeBothColor(idx, self._errColor)
-        else:
-            if self._errs & _DNS_ERRS.SAME_6:
-                self._errs &= ~_DNS_ERRS.SAME_6
-                self._changeBothColor(idx, self._okColor)
-            self._changeColor(idx, self._okColor)
+        self._changeColor(role, self._okColor)
+        # Checking against duplicate IPs...
+        if self._ipsData[role].ip in self._mpIpDns:
+            self._errs.dupIps.add(role)
+            self._changeColor(role, self._errColor)
+        elif role in self._errs.dupIps:
+            self._errs.dupIps.remove(role)
+            self._changeColor(role, self._okColor)
+        # Checking against equality of IPs of the same version...
+        if self._bothIpsEqual(role):
+            self._errs.sameVers.add(_mpRoleVer[role])
+            self._changeBothColor(role, self._errColor)
+        elif _mpRoleVer[role] in self._errs.sameVers:
+            self._errs.sameVers.remove(_mpRoleVer[role])
+            self._changeBothColor(role, self._okColor)
         self._updateErrMsgOkBtn()
         return True
     
@@ -480,6 +448,18 @@ class DnsDialog(tk.Toplevel):
         return not any(
             self._ipsData[idx].svar.get()
             for idx in self._ipsData.keys())
+    
+    def _bothIpsEqual(self, role: IPRole) -> bool:
+        if role == IPRole.PRIM_4 or role == IPRole.SECON_4:
+            return self._ipsData[IPRole.PRIM_4].ip is not None and \
+                self._ipsData[IPRole.SECON_4].ip is not None and \
+                self._ipsData[IPRole.PRIM_4].ip == self._ipsData[
+                IPRole.SECON_4].ip
+        elif role == IPRole.PRIM_6 or role == IPRole.SECON_6:
+            return self._ipsData[IPRole.PRIM_6].ip is not None and \
+                self._ipsData[IPRole.SECON_6].ip is not None and \
+                self._ipsData[IPRole.PRIM_6].ip == self._ipsData[
+                IPRole.SECON_6].ip
     
     def _changeAllColors(self, color: str) -> None:
         for ipIdx in self._ipsData.keys():
@@ -493,33 +473,48 @@ class DnsDialog(tk.Toplevel):
             self._ipsData[IPRole.PRIM_6].lbl.config(foreground=color)
             self._ipsData[IPRole.SECON_6].lbl.config(foreground=color)
     
+    def _chnagePeerColor(self, role: IPRole, color: str) -> None:
+        """Changes the color of the other IP in the same version."""
+        match role:
+            case IPRole.PRIM_4:
+                self._ipsData[IPRole.SECON_4].lbl.config(foreground=color)
+            case IPRole.SECON_4:
+                self._ipsData[IPRole.PRIM_4].lbl.config(foreground=color)
+            case IPRole.PRIM_6:
+                self._ipsData[IPRole.SECON_6].lbl.config(foreground=color)
+            case IPRole.SECON_6:
+                self._ipsData[IPRole.PRIM_6].lbl.config(foreground=color)
+    
     def _changeColor(self, ip_idx: IPRole, color: str) -> None:
         self._ipsData[ip_idx].lbl.config(foreground=color)
     
     def _updateErrMsgOkBtn(self) -> None:
         """Updates error messages and OK button enability."""
-        #
         msgs = list[str]()
+        #
         if self._errs.nameErr != _DnsNameErrs.OK:
             msgs.append(_NAME_MSGS[self._errs.nameErr])
         #
         if self._errs.noIp:
             msgs.append(_('ALL_IPS_EMPTY'))
         #
-        for role in self._errs.badIps:
-            msgs.append(_('BAD_DNS_IP').format(
-                _mpRoleMoid[role],
+        for role in self._errs.dupIps:
+            msgs.append(_('DUP_DNS_IP').format(
+                _(_mpRoleMoid[role]),
                 self._mpIpDns[self._ipsData[role].ip].name)) # type: ignore
         #
-        for role in self._errs.dupIps:
-            msgs.append(_('DUP_DNS_IP').format(_mpRoleMoid[role]))
+        for role in self._errs.badIps:
+            msgs.append(_('BAD_DNS_IP').format(_(_mpRoleMoid[role])))
+        #
+        for ver in self._errs.sameVers:
+            msgs.append(_('SAME_PRIM_SECON').format(_mpVerMoid[ver]))
         #
         msg = '\n'.join(msgs)
         self._txt.config(state=tk.NORMAL)
         self._txt.delete("1.0", tk.END)
         self._txt.insert(tk.END, msg)
         self._txt.config(state=tk.DISABLED)
-        if self._errs:
+        if msgs:
             self._btn_ok.config(state=tk.DISABLED)
         else:
             self._btn_ok.config(state=tk.NORMAL)

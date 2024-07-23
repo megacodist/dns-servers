@@ -14,15 +14,18 @@ class NetIntView(tk.Frame):
             self,
             master: tk.Misc,
             selection_cb: Callable[[int | None], None] | None = None,
+            d_click_cb: Callable[[], None] | None = None,
             **kwargs,
             ) -> None:
         super().__init__(master, **kwargs)
         self._cbSelection = selection_cb
+        self._cbDClick = d_click_cb
         self._canConn = 'green'
         self._noConn = '#ca482e'
         self._initGui()
         # Bindings...
         self._lstbx.bind("<<ListboxSelect>>", self._onSelection)
+        self._lstbx.bind('<Double-1>', self._onDoubleClicked)
     
     def _initGui(self) -> None:
         self.columnconfigure(0, weight=1)
@@ -60,6 +63,10 @@ class NetIntView(tk.Frame):
                 self._cbSelection(selection[0])
             except IndexError:
                 self._cbSelection(None)
+    
+    def _onDoubleClicked(self, _: tk.Event) -> None:
+        if self._cbDClick:
+            self._cbDClick()
     
     def _getItemColor(self, net_int: NetInt) -> str:
         if net_int.connectivity():

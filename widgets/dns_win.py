@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, TYPE_CHECKING, Literal
+from typing import Callable, TYPE_CHECKING
 
 import PIL.Image
 import PIL.ImageTk
@@ -21,7 +21,7 @@ from db import DnsServer, IDatabase
 from ntwrk import NetInt
 from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
-from utils.types import DnsInfo, GifImage, TkImg
+from utils.types import GifImage, TkImg
 
 
 if TYPE_CHECKING:
@@ -159,7 +159,8 @@ class DnsWin(tk.Tk):
         #
         self._netintvw = NetIntView(
             self._lfrm_netInts,
-            self._readDnsInfo)
+            self._readDnsInfo,
+            self._showNetIntInfo)
         self._netintvw.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         #
         self._lfrm_ips = ttk.LabelFrame(self._pwin_netIntIps)
@@ -265,6 +266,19 @@ class DnsWin(tk.Tk):
         self._menu_app.add_cascade(
             label=_('QUIT'),
             command=self._onWinClosing)
+        # Creating `Adapters` menu...
+        self._menu_netints = tk.Menu(
+            master=self._menubar,
+            tearoff=0)
+        self._menubar.add_cascade(
+            label=_('NET_INTS'),
+            menu=self._menu_netints)
+        self._menu_netints.add_cascade(
+            label=_('READ_INTERFACES'),
+            command=self._readNetInts)
+        self._menu_netints.add_cascade(
+            label=_('SHOW_NET_INT_INFO'),
+            command=self._showNetIntInfo)
         # Creating `Commands` menu...
         self._menu_cmds = tk.Menu(
             master=self._menubar,
@@ -275,9 +289,6 @@ class DnsWin(tk.Tk):
         self._menu_cmds.add_command(
             label=_('CLEAR_MSGS'),
             command=self._msgvw.Clear)
-        self._menu_cmds.add_cascade(
-            label=_('READ_INTERFACES'),
-            command=self._readNetInts)
         self._menu_cmds.add_cascade(
             label=_('READ_DNSES'),
             command=self._readDnses)
@@ -385,17 +396,26 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
     
-    def _getNetInt(self) -> str | None:
-        """Gets the selected network interface name. If nothing is
+    def _getNetIntIdx(self) -> int | None:
+        """Gets the selected network interface index. If nothing is
         selected, it informs the user and returns `None`.
         """
-        interIdx = self._netintvw.getSelectedIdx()
-        if interIdx is None:
+        idx = self._netintvw.getSelectedIdx()
+        if idx is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_INTER_VIEW'),
                 type_=MessageType.WARNING)
             return
-        return self._netInts[interIdx]['Name'] # type: ignore
+        return idx
+    
+    def _showNetIntInfo(self) -> None:
+        idx = self._getNetIntIdx()
+        if idx is None:
+            return
+        #
+        from widgets.net_int_dialog import NetIntDialog
+        netIntDlg = NetIntDialog(self, self._netInts[idx])
+        netIntDlg.showDialog()
 
     def _onDnsApplied(self, fut: Future[None]) -> None:
         try:
@@ -413,15 +433,9 @@ class DnsWin(tk.Tk):
         dns = dnsDialog.showDialog()
         if dns is None:
             return
-        # Checking that IPs already exist...
-        ipsSet = dns.toSet()
-        if ipsSet in self._mpIpDns:
-            self._msgvw.AddMessage(
-                _('IPS_EXIST').format(self._mpIpDns[ipsSet].name),
-                type_=MessageType.ERROR)
-            return
         # Adding DNS server...
-        self._mpIpDns[ipsSet] = dns
+        for ip in dns.toSet():
+            self._mpIpDns[ip] = dns
         self._mpNameDns[dns.name] = dns
         self._db.insertDns(dns)
         self._dnsvw.appendDns(dns)
@@ -440,7 +454,8 @@ class DnsWin(tk.Tk):
             return
         ipsSet = self._mpNameDns[dnsName].toSet()
         del self._mpNameDns[dnsName]
-        del self._mpIpDns[ipsSet]
+        for ip in ipsSet:
+            del self._mpIpDns[ip]
         self._db.deleteDns(dnsName)
         self._dnsvw.deleteName(dnsName)
     
@@ -453,41 +468,42 @@ class DnsWin(tk.Tk):
                 _('SELECT_ONE_ITEM_DNS_VIEW'),
                 type_=MessageType.WARNING)
             return
-        dnsName = names[0]
-        dnsIps = self._mpNameDns[dnsName].toSet()
-        cpyNameDns = self._mpNameDns.copy()
-        del cpyNameDns[dnsName]
-        dnsDialog = DnsDialog(self, cpyNameDns, self._mpNameDns[dnsName])
+        dnsOldName = names[0]
+        dnsOldIps = self._mpNameDns[dnsOldName].toIpTuple()
+        mpNameDnsCpy = self._mpNameDns.copy()
+        del mpNameDnsCpy[dnsOldName]
+        mpIpDnsCpy = self._mpIpDns.copy()
+        for ip in dnsOldIps:
+            del mpIpDnsCpy[ip]
+        dnsDialog = DnsDialog(
+            self,
+            mpNameDnsCpy,
+            mpIpDnsCpy,
+            self._mpNameDns[dnsOldName])
         newDns = dnsDialog.showDialog()
-        if (newDns is None) or (newDns == self._mpNameDns[dnsName]):
+        if (newDns is None) or (newDns.name == dnsOldName and
+                newDns.toIpTuple() == dnsOldIps):
             # No change, doing nothing...
             return
-        # Checking existence of IPs...
-        if newDns.toSet() in cpyNameDns:
-            self._msgvw.AddMessage(
-                _('IPS_EXIST').format(self._mpIpDns[newDns.toSet()].name),
-                type_=MessageType.ERROR)
-            return
         # Applying change...
+        self._mpNameDns = mpNameDnsCpy
         self._mpNameDns[newDns.name] = newDns
-        if newDns.name != dnsName:
-            del self._mpNameDns[dnsName]
-        self._mpIpDns[newDns.toSet()] = newDns
-        if newDns.toSet() != dnsIps:
-            del self._mpIpDns[dnsIps]
-        self._dnsvw.changeDns(dnsName, newDns)
-        self._db.updateDns(dnsName, newDns)
+        self._mpIpDns = mpIpDnsCpy
+        for ip in dnsOldIps:
+            self._mpIpDns[ip] = newDns
+        self._dnsvw.changeDns(dnsOldName, newDns)
+        self._db.updateDns(dnsOldName, newDns)
     
     def _testUrl(self) -> None:
         # Reading network interface name...
-        netIntName = self._getNetInt()
-        if netIntName is None:
+        idx = self._getNetIntIdx()
+        if idx is None:
             return
         #
         from widgets.url_dialog import UrlDialog
         dnsDialog = UrlDialog(
             self,
-            netIntName,
+            self._netInts[idx].NetConnectionID,
             self._mpNameDns,
             self._IMG_GTICK,
             self._IMG_REDX,
