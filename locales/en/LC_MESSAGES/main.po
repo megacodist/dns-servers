@@ -23,6 +23,12 @@ msgstr "DNS server manager"
 msgid "APP"
 msgstr "App"
 
+msgid "KEY"
+msgstr "Key"
+
+msgid "VALUE"
+msgstr "Value"
+
 msgid "NAME"
 msgstr "Name"
 
@@ -97,9 +103,6 @@ msgstr "DNS servers"
 
 msgid "NET_INTS"
 msgstr "Network interfaces"
-
-msgid "NET_INT_INFO"
-msgstr "Network interface information"
 
 msgid "SHOW_NET_INT_INFO"
 msgstr "Show interface info"

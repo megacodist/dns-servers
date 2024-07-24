@@ -10,11 +10,87 @@
 1. `enumNetInts`
 """
 
+from __future__ import annotations
+import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 import re
-from typing import Any
+from typing import Iterable
 from uuid import UUID
+
+
+class NetConfigCode(enum.IntEnum):
+    SUCCESSFUL = 0
+    """Successful completion"""
+    SUCCESSFUL_REBOOT = 1
+    """Successful completion, but a reboot is required"""
+    NOT_SUPPORTED = 64
+    """Method not supported on this platform"""
+    ERR_UNKNOWN = 65
+    """Unknown failure"""
+    BAD_SUBNET_MASK = 66
+    """Invalid subnet mask"""
+    ERR_PROCESSING_IP = 67
+    """An error occurred while processing an IP address"""
+    BAD_IP = 68
+    """Invalid IP address"""
+    BAD_GATEWAY_IP = 69
+    """Invalid gateway IP address"""
+    BAD_DOMAIN_NAME = 70
+    """Invalid domain name"""
+    BAD_HOST_NAME = 71
+    """Invalid host name"""
+    NO_PRIM_SECON_WINS = 72
+    """No primary or secondary WINS server defined"""
+    BAD_FILE = 73
+    """Invalid file"""
+    BAD_SYSTEM_PATH = 74
+    """Invalid system path"""
+    ERR_COPYING_FILE = 75
+    """File copy failed"""
+    BAD_SECURITY_PARAM = 76
+    """Invalid security parameter"""
+    ERR_CONFIG_TCPIP = 77
+    """Unable to configure TCP/IP service"""
+    ERR_CONFIG_DHCP = 78
+    """Unable to configure DHCP service"""
+    ERR_RENEW_DHCP_LEASE = 79
+    """Unable to renew DHCP lease"""
+    ERR_RELEASE_DHCP_LEASE = 80
+    """Unable to release DHCP lease"""
+    IP_NOT_ENABLED = 81
+    """IP not enabled on adapter"""
+    IPX_NOT_ENABLED = 82
+    """IPX not enabled on adapter"""
+    ERR_FRAME_NET_NUM_BOUNDS = 83
+    """Frame or network number bounds error"""
+    BAD_FRAME_TYPE = 84
+    """Invalid frame type"""
+    BAD_NET_NUM = 85
+    """Invalid network number"""
+    DUP_NET_NUM = 86
+    """Duplicate network number"""
+    PARAM_OUT_OF_BOUNDS = 87
+    """Parameter out of bounds"""
+    ACCESS_DENIED = 88
+    """Access denied"""
+    OUT_OF_MEMORY = 89
+    """Out of memory"""
+    ALREADY_EXISTS = 90
+    """Already exists"""
+    PATH_FILE_OBJECT_NOT_FOUND = 91
+    """Path, file, or object not found"""
+    UNSUPPORTED_CONFIGU = 92
+    """Unsupported configuration"""
+    BAD_PARAM = 93
+    """Invalid parameter"""
+    MORE_5_GATEWAYS = 94
+    """More than five gateways specified"""
+    NON_STATIC_IP = 95
+    """Non-static IP addresses detected"""
+    DHCP_NOT_ENABLED = 96
+    """DHCP not enabled on the adapter"""
+    OTHER = 97
 
 
 class MAC:
@@ -113,6 +189,12 @@ class NetInt:
     """Encapsulates a network interface on Microsot Windows. This class
     current supports IP-based network communication.
     """
+
+    @ classmethod
+    def enumAllNetInts(cls) -> list[NetInt]:
+        """Enumerates all network interfaces on this Windows platform."""
+        return _enumNetInts()
+
     def __init__(
             self,
             index: int,
@@ -187,10 +269,38 @@ class NetInt:
         server.
         """
         return self.DHCPEnabled and bool(self.DHCPServer)
+    
+    def setDnsSearchOrder(self, ips: Iterable[IPv4 | IPv6]) -> NetConfigCode:
+        import pythoncom
+        import win32com.client
+        #
+        pythoncom.CoInitialize()
+        wmi = win32com.client.GetObject("winmgmts:")
+        configQuery = f"""
+            SELECT
+                *
+            FROM
+                Win32_NetworkAdapterConfiguration
+            WHERE
+                Index = {self.Index}
+                AND InterfaceIndex = {self.InterfaceIndex}
+                AND MACAddress = '{self.MACAddress}'
+                AND SettingID = '{self.GUID}'
+                AND Description = '{self.Description}'"""
+        print(configQuery)
+        configs = wmi.ExecQuery(configQuery)
+        print(len(configs))
+        if len(configs) != 1:
+            print(NetConfigCode.ERR_UNKNOWN)
+            code = NetConfigCode.ERR_UNKNOWN
+        else:
+            code = configs[0].SetDNSServerSearchOrder(ips)
+        #
+        pythoncom.CoUninitialize()
+        return code
 
 
-def enumNetInts() -> list[NetInt]:
-    """Enumerates network interfaces on this Windows platform."""
+def _enumNetInts() -> list[NetInt]:
     from uuid import UUID
     import pythoncom
     import win32com.client

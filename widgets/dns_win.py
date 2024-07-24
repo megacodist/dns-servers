@@ -18,7 +18,7 @@ from .net_int_view import NetIntView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import NetInt
+from ntwrk import NetInt, NetConfigCode
 from utils.async_ops import AsyncOpManager
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
@@ -62,7 +62,6 @@ class DnsWin(tk.Tk):
         self._HIMG_ADD: PIL.Image.Image
         self._HIMG_REMOVE: PIL.Image.Image
         self._HIMG_EDIT: PIL.Image.Image
-        self._HIMG_APPLY: PIL.Image.Image
         self._HIMG_GTICK: PIL.Image.Image
         self._HIMG_REDX: PIL.Image.Image
         self._HIMG_ARROW: PIL.Image.Image
@@ -70,7 +69,6 @@ class DnsWin(tk.Tk):
         self._IMG_ADD: TkImg
         self._IMG_REMOVE: TkImg
         self._IMG_EDIT: TkImg
-        self._IMG_APPLY: TkImg
         self._IMG_GTICK: TkImg
         self._IMG_REDX: TkImg
         self._IMG_ARROW: TkImg
@@ -114,10 +112,6 @@ class DnsWin(tk.Tk):
         self._HIMG_EDIT = PIL.Image.open(self._RES_DIR / 'edit.png')
         self._HIMG_EDIT = self._HIMG_EDIT.resize(size=(16, 16,))
         self._IMG_EDIT = PIL.ImageTk.PhotoImage(image=self._HIMG_EDIT)
-        # Loading 'apply.png...
-        self._HIMG_APPLY = PIL.Image.open(self._RES_DIR / 'apply.png')
-        self._HIMG_APPLY = self._HIMG_APPLY.resize(size=(16, 16,))
-        self._IMG_APPLY = PIL.ImageTk.PhotoImage(image=self._HIMG_APPLY)
         # Loading 'gtick.png...
         self._HIMG_GTICK = PIL.Image.open(self._RES_DIR / 'gtick.png')
         self._HIMG_GTICK = self._HIMG_GTICK.resize(size=(16, 16,))
@@ -179,6 +173,12 @@ class DnsWin(tk.Tk):
             self._frm_ipsTlbr,
             image=self._IMG_REMOVE) # type: ignore
         self._btn_deletIps.pack(side=tk.LEFT)
+        #
+        self._btn_setIps = ttk.Button(
+            self._frm_ipsTlbr,
+            command=self._setIps,
+            image=self._IMG_ARROW) # type: ignore
+        self._btn_setIps.pack(side=tk.LEFT)
         #
         self._ipsvw = IpsView(self._lfrm_ips)
         self._ipsvw.pack(fill=tk.BOTH, expand=True)
@@ -304,7 +304,6 @@ class DnsWin(tk.Tk):
         self._HIMG_ADD.close()
         self._HIMG_REMOVE.close()
         self._HIMG_EDIT.close()
-        self._HIMG_APPLY.close()
         self._HIMG_GTICK.close()
         self._HIMG_REDX.close()
         self._HIMG_ARROW.close()
@@ -413,9 +412,23 @@ class DnsWin(tk.Tk):
         if idx is None:
             return
         #
-        from widgets.net_int_dialog import NetIntDialog
-        netIntDlg = NetIntDialog(self, self._netInts[idx])
+        from widgets.net_int_dialog import NetIntDialog, NetIntDlgSettings
+        netIntDlg = NetIntDialog(
+            self,
+            self._netInts[idx],
+            xy=(self._settings.nid_x, self._settings.nid_y,),
+            width=self._settings.nid_width,
+            height=self._settings.nid_height,
+            key_width=self._settings.nid_key_width,
+            value_width=self._settings.nid_value_width,)
         netIntDlg.showDialog()
+        nidSettings = netIntDlg.settings
+        self._settings.nid_x = nidSettings.x
+        self._settings.nid_y = nidSettings.y
+        self._settings.nid_width = nidSettings.width
+        self._settings.nid_height = nidSettings.height
+        self._settings.nid_key_width = nidSettings.key_width
+        self._settings.nid_value_width = nidSettings.value_int
 
     def _onDnsApplied(self, fut: Future[None]) -> None:
         try:
@@ -493,6 +506,22 @@ class DnsWin(tk.Tk):
             self._mpIpDns[ip] = newDns
         self._dnsvw.changeDns(dnsOldName, newDns)
         self._db.updateDns(dnsOldName, newDns)
+    
+    def _setIps(self) -> None:
+        # Reading network interface index...
+        netIntIdx = self._getNetIntIdx()
+        if netIntIdx is None:
+            return
+        try:
+            ips = self._dnsvw.getIps()
+        except ValueError:
+            self._msgvw.AddMessage(
+                'Select IPs individually or entire rows.',
+                type_=MessageType.ERROR)
+            return
+        code = self._netInts[netIntIdx].setDnsSearchOrder(ips)
+        if code != NetConfigCode.SUCCESSFUL:
+            self._msgvw.AddMessage(code.name)
     
     def _testUrl(self) -> None:
         # Reading network interface name...

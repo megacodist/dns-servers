@@ -2,6 +2,7 @@
 # 
 #
 
+from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 import tkinter as tk
 from tkinter import ttk
@@ -118,3 +119,22 @@ class Dnsview(tksheet.Sheet):
         rowIdx = self._mpNameRow[dns_name]
         self.delete_row(rowIdx)
         del self._mpNameRow[dns_name]
+    
+    def getIps(self) -> list[IPv4 | IPv6]:
+        """Returns a list of all selected IPs in the view. Raises
+        `ValueError` if at least one name cell is selected individually.
+        """
+        rows = self.get_selected_rows()
+        cells = self.get_selected_cells()
+        from pprint import pprint
+        pprint(rows)
+        pprint(cells)
+        ips = list[IPv4 | IPv6]()
+        for cell in cells:
+            if cell[1] == 0:
+                if cell[1] in rows:
+                    continue
+                else:
+                    raise ValueError()
+            ips.append(self.get_cell_data(*cell)) # type: ignore
+        return ips

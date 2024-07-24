@@ -34,10 +34,10 @@ def mergeMsgs(braced: str, embed: str) -> str:
 
 def readNetInts(q: Queue[str] | None) -> list[NetInt]:
     """Reads all network interfaces. Raises `TypeError` upon any failure."""
-    from ntwrk import enumNetInts
+    from ntwrk import NetInt
     if q:
         q.put(_('READING_INTERFACES'))
-    return enumNetInts()
+    return NetInt.enumAllNetInts()
 
 
 def listDnses(

@@ -22,3 +22,10 @@ class AppSettings(types_module.AppSettings):
     secon_4_col_width = 100
     prim_6_col_width = 100
     secon_6_col_width = 100
+    # NetIntDialog...
+    nid_x = 200
+    nid_y = 200
+    nid_width = 400
+    nid_height = 300
+    nid_key_width = 150
+    nid_value_width = 180
