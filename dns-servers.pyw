@@ -53,6 +53,10 @@ def main() -> None:
         dnsWin = DnsWin(_RES_DIR, _settings, db)
         dnsWin.mainloop()
     finally:
+        try:
+            netIntMonitor.cancel() # type: ignore
+        except NameError:
+            pass
         db.close()
         _settings.Save()
 

@@ -6,6 +6,7 @@ from concurrent.futures import CancelledError, Future
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from pathlib import Path
+from queue import Queue
 import tkinter as tk
 from tkinter import ttk
 from typing import Callable, TYPE_CHECKING
@@ -20,6 +21,7 @@ from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
 from ntwrk import NetInt, NetConfigCode
 from utils.async_ops import AsyncOpManager
+from utils.net_int_monitor import NetIntMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
 
@@ -53,6 +55,9 @@ class DnsWin(tk.Tk):
         """The database object."""
         self._netInts: list[NetInt]
         """A list of all network interfaces."""
+        self._q = Queue()
+        self._netIntThrd: NetIntMonitor
+        """The thread looking for changes in network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
         # Images...
@@ -88,6 +93,7 @@ class DnsWin(tk.Tk):
         self._asyncMngr = AsyncOpManager(self, self._GIF_WAIT)
         # Bindings & events...
         self.protocol('WM_DELETE_WINDOW', self._onWinClosing)
+        self.bind('<<NetIntChange>>', self._onNetIntChanges)
         # Initializes views...
         self.after(100, self._initViews)
     
@@ -322,6 +328,10 @@ class DnsWin(tk.Tk):
         # Cleaning up...
         self._asyncMngr.close()
         # Destroying the window...
+        try:
+            self._netIntThrd.cancel()
+        except AttributeError:
+            pass
         self.destroy()
     
     def _saveGeometry(self) -> None:
@@ -345,6 +355,10 @@ class DnsWin(tk.Tk):
         else:
             logging.error(
                 'Cannot get the geometry of the window.', stack_info=True)
+    
+    def _onNetIntChanges(self, _: tk.Event) -> None:
+        event = self._q.get()
+        print(type(event))
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
@@ -374,6 +388,15 @@ class DnsWin(tk.Tk):
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_INTERFACES')),
                 type_=MessageType.INFO)
+        else:
+            # Running WMI monitoring thread...
+            try:
+                self._netIntThrd
+                return
+            except AttributeError:
+                pass
+            self._netIntThrd = NetIntMonitor(self, self._q)
+            self._netIntThrd.start()
     
     def _readDnses(self) -> None:
         from utils.funcs import listDnses

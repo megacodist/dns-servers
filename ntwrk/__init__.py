@@ -30,67 +30,73 @@ class NetConfigCode(enum.IntEnum):
     """Unknown failure"""
     BAD_SUBNET_MASK = 66
     """Invalid subnet mask"""
-    ERR_PROCESSING_IP = 67
-    """An error occurred while processing an IP address"""
-    BAD_IP = 68
-    """Invalid IP address"""
-    BAD_GATEWAY_IP = 69
-    """Invalid gateway IP address"""
-    BAD_DOMAIN_NAME = 70
-    """Invalid domain name"""
-    BAD_HOST_NAME = 71
-    """Invalid host name"""
-    NO_PRIM_SECON_WINS = 72
-    """No primary or secondary WINS server defined"""
-    BAD_FILE = 73
-    """Invalid file"""
-    BAD_SYSTEM_PATH = 74
-    """Invalid system path"""
-    ERR_COPYING_FILE = 75
-    """File copy failed"""
-    BAD_SECURITY_PARAM = 76
-    """Invalid security parameter"""
-    ERR_CONFIG_TCPIP = 77
-    """Unable to configure TCP/IP service"""
-    ERR_CONFIG_DHCP = 78
-    """Unable to configure DHCP service"""
-    ERR_RENEW_DHCP_LEASE = 79
-    """Unable to renew DHCP lease"""
-    ERR_RELEASE_DHCP_LEASE = 80
-    """Unable to release DHCP lease"""
-    IP_NOT_ENABLED = 81
-    """IP not enabled on adapter"""
-    IPX_NOT_ENABLED = 82
-    """IPX not enabled on adapter"""
-    ERR_FRAME_NET_NUM_BOUNDS = 83
-    """Frame or network number bounds error"""
-    BAD_FRAME_TYPE = 84
-    """Invalid frame type"""
-    BAD_NET_NUM = 85
-    """Invalid network number"""
-    DUP_NET_NUM = 86
-    """Duplicate network number"""
-    PARAM_OUT_OF_BOUNDS = 87
-    """Parameter out of bounds"""
-    ACCESS_DENIED = 88
-    """Access denied"""
-    OUT_OF_MEMORY = 89
-    """Out of memory"""
-    ALREADY_EXISTS = 90
-    """Already exists"""
-    PATH_FILE_OBJECT_NOT_FOUND = 91
-    """Path, file, or object not found"""
-    UNSUPPORTED_CONFIGU = 92
-    """Unsupported configuration"""
-    BAD_PARAM = 93
-    """Invalid parameter"""
-    MORE_5_GATEWAYS = 94
+    ERR_OCCURRED_INSTANCE = 67
+    """An error occurred while processing an Instance that was returned"""
+    BAD_PARAM = 68
+    """Invalid input parameter"""
+    MORE_5_GATEWAYS = 69
     """More than five gateways specified"""
-    NON_STATIC_IP = 95
-    """Non-static IP addresses detected"""
-    DHCP_NOT_ENABLED = 96
+    BAD_IP = 70
+    """Invalid IP address"""
+    BAD_GATEWAY_IP = 71
+    """Invalid gateway IP address"""
+    ERR_OCCURRED_REGISTRY = 72
+    """An error occurred while accessing the Registry for the requested information"""
+    BAD_DOMAIN_NAME = 73
+    """Invalid domain name"""
+    BAD_HOST_NAME = 74
+    """Invalid host name"""
+    NO_PRIM_SECON_WINS = 75
+    """No primary or secondary WINS server defined"""
+    BAD_FILE = 76
+    """Invalid file"""
+    BAD_SYSTEM_PATH = 77
+    """Invalid system path"""
+    ERR_COPYING_FILE = 78
+    """File copy failed"""
+    BAD_SECURITY_PARAM = 79
+    """Invalid security parameter"""
+    ERR_CONFIG_TCPIP = 80
+    """Unable to configure TCP/IP service"""
+    ERR_CONFIG_DHCP = 81
+    """Unable to configure DHCP service"""
+    ERR_RENEW_DHCP_LEASE = 82
+    """Unable to renew DHCP lease"""
+    ERR_RELEASE_DHCP_LEASE = 83
+    """Unable to release DHCP lease"""
+    IP_NOT_ENABLED = 84
+    """IP not enabled on adapter"""
+    IPX_NOT_ENABLED = 85
+    """IPX not enabled on adapter"""
+    ERR_FRAME_NET_NUM_BOUNDS = 86
+    """Frame/network number bounds error"""
+    BAD_FRAME_TYPE = 87
+    """Invalid frame type"""
+    BAD_NET_NUM = 88
+    """Invalid network number"""
+    DUP_NET_NUM = 89
+    """Duplicate network number"""
+    PARAM_OUT_OF_BOUNDS = 90
+    """Parameter out of bounds"""
+    ACCESS_DENIED = 91
+    """Access denied"""
+    OUT_OF_MEMORY = 92
+    """Out of memory"""
+    ALREADY_EXISTS = 93
+    """Already exists"""
+    PATH_FILE_OBJECT_NOT_FOUND = 94
+    """Path, file, or object not found"""
+    ERR_NOTIFYING_SERVICE = 95
+    """Unable to notify service"""
+    ERR_NOTIFYING_DNS = 96
+    """Unable to notify DNS service"""
+    NON_CONFIG = 97
+    """Interface not configurable"""
+    ERR_ALL_DHCP_LEASES = 98
+    """Not all DHCP leases could be released/renewed"""
+    DHCP_NOT_ENABLED = 100
     """DHCP not enabled on the adapter"""
-    OTHER = 97
+    OTHER = 101
 
 
 class MAC:
@@ -270,34 +276,16 @@ class NetInt:
         """
         return self.DHCPEnabled and bool(self.DHCPServer)
     
-    def setDnsSearchOrder(self, ips: Iterable[IPv4 | IPv6]) -> NetConfigCode:
-        import pythoncom
-        import win32com.client
-        #
-        pythoncom.CoInitialize()
-        wmi = win32com.client.GetObject("winmgmts:")
-        configQuery = f"""
-            SELECT
-                *
-            FROM
-                Win32_NetworkAdapterConfiguration
-            WHERE
-                Index = {self.Index}
-                AND InterfaceIndex = {self.InterfaceIndex}
-                AND MACAddress = '{self.MACAddress}'
-                AND SettingID = '{self.GUID}'
-                AND Description = '{self.Description}'"""
-        print(configQuery)
-        configs = wmi.ExecQuery(configQuery)
-        print(len(configs))
-        if len(configs) != 1:
-            print(NetConfigCode.ERR_UNKNOWN)
-            code = NetConfigCode.ERR_UNKNOWN
-        else:
-            code = configs[0].SetDNSServerSearchOrder(ips)
-        #
-        pythoncom.CoUninitialize()
-        return code
+    def setDnsSearchOrder(
+            self,
+            ips: Iterable[IPv4 | IPv6],
+            ) -> NetConfigCode:
+        import wmi
+        wmi_ = wmi.WMI()
+        configs = wmi_.Win32_NetworkAdapterConfiguration(Index=self.Index)
+        code: tuple[int] = configs[0].SetDNSServerSearchOrder(
+            [str(ip) for ip in ips])
+        return NetConfigCode(code[0])
 
 
 def _enumNetInts() -> list[NetInt]:

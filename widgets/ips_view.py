@@ -225,6 +225,7 @@ class IpsView(ttk.Frame):
             sticky=tk.EW)
     
     def populate(self, net_int: NetInt, dnses: Iterable[DnsServer]) -> None:
+        self._mpCrLbl.clear()
         if net_int.dnsProvided():
             self._mode = _RedrawMode.IPS
             ips = net_int.DNSServerSearchOrder

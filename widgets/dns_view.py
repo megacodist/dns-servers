@@ -127,8 +127,6 @@ class Dnsview(tksheet.Sheet):
         rows = self.get_selected_rows()
         cells = self.get_selected_cells()
         from pprint import pprint
-        pprint(rows)
-        pprint(cells)
         ips = list[IPv4 | IPv6]()
         for cell in cells:
             if cell[1] == 0:
