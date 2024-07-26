@@ -9,8 +9,7 @@ from typing import Callable, Literal, TYPE_CHECKING
 from urllib.parse import ParseResult
 
 from db import DnsServer, IDatabase
-from ntwrk import NetInt
-from utils.types import DnsInfo
+from ntwrk import NetAdap
 
 
 if TYPE_CHECKING:
@@ -32,12 +31,11 @@ def mergeMsgs(braced: str, embed: str) -> str:
     return braced.format(embed)
 
 
-def readNetInts(q: Queue[str] | None) -> list[NetInt]:
+def readNetAdaps(q: Queue[str] | None) -> list[NetAdap]:
     """Reads all network interfaces. Raises `TypeError` upon any failure."""
-    from ntwrk import NetInt
     if q:
         q.put(_('READING_INTERFACES'))
-    return NetInt.enumAllNetInts()
+    return NetAdap.enumAllNetInts()
 
 
 def listDnses(
@@ -52,45 +50,6 @@ def listDnses(
     mpNameDns = {dns.name:dns for dns in dnses}
     mpIpDns = {ip:dns for dns in dnses for ip in dns.toSet()}
     return mpNameDns, mpIpDns
-
-
-def setDns(
-        q: Queue | None,
-        net_int: str,
-        dns: DnsServer | DnsInfo | Literal['DHCP'],
-        ) -> None:
-    """Sets DNS servers of the specified network interface.
-
-    #### Exceptions:
-    1. `TypeError`
-    2. `OpFailedError`
-    3. `subprocess.CalledProcessError`
-    4. `ntwrk.ParsingError`
-    """
-    from ntwrk import setDns, setDnsDhcp, readDnsInfo
-    if q:
-        try:
-            dnsName = dns.name # type: ignore
-        except AttributeError:
-            dnsName = dns if isinstance(dns, str) else _('UNNAMED')
-        q.put(_('SETTING_DNS').format(net_int, dnsName))
-    # Setting DNS servers to DHCP if requested...
-    if isinstance(dns, str):
-        if dns == 'DHCP':
-            setDnsDhcp(net_int)
-            if not (readDnsInfo(net_int) is 'DCHP'):
-                raise OpFailedError('cannot set DNS servers to DHCP')
-            return
-        raise TypeError(f'only DHCP is allowed not {dns}')
-    # Setting DNS servers to provided IPs...
-    setDns(net_int, dns.primary, dns.secondary)
-    dnsInfo = readDnsInfo(net_int)
-    try:
-        isEqual = dnsInfo.ipsToSet() == dns.ipsToSet() # type: ignore
-    except Exception:
-        isEqual = False
-    if not isEqual:
-        raise OpFailedError('cannot set DNS servers as expected')
 
 
 def ipToStr(ip: IPv4 | IPv6 | None) -> str:

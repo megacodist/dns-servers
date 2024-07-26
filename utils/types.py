@@ -39,29 +39,6 @@ class DnsIps:
         """IPv6 addresses of this object."""
 
 
-class DnsInfo:
-    """This class is used when DNS servers information is not possible
-    via `DnsServer`.
-    """
-    def __init__(
-            self,
-            primary: IPv4 | None = None,
-            secondary: IPv4 | None = None,
-            ) -> None:
-        self.primary = primary
-        self.secondary = secondary
-    
-    def ipsToSet(self) -> frozenset[IPv4]:
-        from db import DnsServer
-        return DnsServer.primSeconToSet(self.primary, self.secondary)
-    
-    def __repr__(self) -> str:
-        from utils.funcs import ipToStr
-        return (f'<{self.__class__.__qualname__} '
-            f'primary={ipToStr(self.primary)} '
-            f'secondary={ipToStr(self.secondary)}>')
-
-
 class _GifIter:
     def __init__(self, frames: list[TkImg]) -> None:
         self._frames = frames

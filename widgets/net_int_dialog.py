@@ -9,7 +9,7 @@ from typing import Callable, TYPE_CHECKING, NamedTuple
 
 from tksheet import Sheet
 
-from ntwrk import NetInt
+from ntwrk import NetAdap
 
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class NetIntDialog(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            net_int: NetInt,
+            net_int: NetAdap,
             *,
             xy: tuple[int, int] | None = None,
             width: int = 400,

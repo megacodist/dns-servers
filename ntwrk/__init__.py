@@ -4,7 +4,7 @@
 """This module offers network APIs for this application and contains:
 
 #### Types
-1. `NetInt`
+1. `NetAdap`
 
 #### Functions
 1. `enumNetInts`
@@ -191,18 +191,23 @@ class MAC:
         return self._macAddr == "FF:FF:FF:FF:FF:FF"
 
 
-class NetInt:
-    """Encapsulates a network interface on Microsot Windows. This class
-    current supports IP-based network communication.
+class NetAdap:
+    """Instances of this class represent instances of `Win32_NetworkAdapter`
+    class on WMI.
     """
 
+    _netAdapAttrs = ('DeviceID', 'Index', 'InterfaceIndex', 'MACAddress', 'GUID',
+        'Description', 'NetConnectionID', 'NetEnabled',)
+    """The attributes of interest of `Win32_NetworkAdapter` class."""
+
     @ classmethod
-    def enumAllNetInts(cls) -> list[NetInt]:
+    def enumAllNetInts(cls) -> list[NetAdap]:
         """Enumerates all network interfaces on this Windows platform."""
         return _enumNetInts()
 
     def __init__(
             self,
+            device_id: str,
             index: int,
             interface_idx: int,
             net_conn_id: str,
@@ -216,6 +221,15 @@ class NetInt:
             mac_addr: MAC | None,
             dhcp_server: IPv4 | IPv6 | None
             ) -> None:
+        self.DeviceID = device_id
+        """The Unique identifier of the network adapter from other devices
+        on the system.
+        """
+        self.Index = index
+        """Index number of the network adapter, stored in the system
+        registry.
+        """
+        self.InterfaceIndex = interface_idx
         self.NetConnectionID = net_conn_id
         """The name of this network interface in the shell."""
         self.Description = description
@@ -229,8 +243,9 @@ class NetInt:
         necessary network configurations."""
         self.DNSServerSearchOrder = dns_order
         self.DefaultIPGateway = default_gateway
-        self.Index = index
-        self.InterfaceIndex = interface_idx
+        """An optional tuple of IP addresses of default gateways that the
+        computer system uses.
+        """
         self.MACAddress = mac_addr
         self.GUID = guid
         self.IPEnabled = ip_enabled
@@ -238,6 +253,10 @@ class NetInt:
         its network communicatiopns.
         """
         self.IPAddress = ip_addr
+        """The optional IP addresses assigned to this network interface.
+        It's a crucial property for identifying and communicating with a
+        device on a network.
+        """
     
     def __repr__(self) -> str:
         return (f"<{self.__class__.__qualname__} "
@@ -288,7 +307,29 @@ class NetInt:
         return NetConfigCode(code[0])
 
 
-def _enumNetInts() -> list[NetInt]:
+class NetAdapConfig:
+    """Instances of this class represent instances of
+    `Win32_NetworkAdapterConfiguration` class on WMI.
+    """
+
+    _netAdapConfigAttrs = ('Index', 'InterfaceIndex', 'MACAddress',
+        'SettingID', 'Description', 'DHCPEnabled', 'DNSServerSearchOrder',
+        'DefaultIPGateway', 'IPEnabled', 'IPAddress', 'DHCPServer',)
+    """The attributes of interest of `Win32_NetworkAdapterConfiguration`
+    class.
+    """
+
+    def __init__(
+            self,
+            index: int,
+            ) -> None:
+        selfIndex = index
+        """A network adapter (an instance of `NetAdap`) can
+        have multiple configuration and each of them has a unique `Index`.
+        """
+
+
+def _enumNetInts() -> list[NetAdap]:
     from uuid import UUID
     import pythoncom
     import win32com.client
@@ -297,26 +338,21 @@ def _enumNetInts() -> list[NetInt]:
     pythoncom.CoInitialize()
     wmi = win32com.client.GetObject("winmgmts:")
     # Querying network adapter configurations...
-    configQuery = """
+    configQuery = f"""
         SELECT
-            Index, InterfaceIndex, MACAddress, SettingID, Description,
-            DHCPEnabled, DNSServerSearchOrder, DefaultIPGateway, IPEnabled,
-            IPAddress, DHCPServer
+            {', '.join(NetAdapConfig._netAdapConfigAttrs)}
         FROM
             Win32_NetworkAdapterConfiguration"""
     configs = wmi.ExecQuery(configQuery)
     # Querying network adapters...
-    adaptersQuery = """
+    adapsQuery = f"""
         SELECT
-            Index, InterfaceIndex, MACAddress, GUID, Description,
-            NetConnectionID, NetEnabled
+            {', '.join(NetAdap._netAdapAttrs)}
         FROM
-            Win32_NetworkAdapter
-        WHERE
-            PhysicalAdapter=True"""
-    adapters = wmi.ExecQuery(adaptersQuery)
+            Win32_NetworkAdapter"""
+    adapters = wmi.ExecQuery(adapsQuery)
     # Merging results...
-    results = list[NetInt]()
+    results = list[NetAdap]()
     # Firstly, combining using GUID (SettingID)....
     mpConfigs = dict[UUID, CDispatch]()
     missCfgs = list[CDispatch]()
@@ -366,7 +402,7 @@ def _enumNetInts() -> list[NetInt]:
             logging.error('Invalid DHCP server in '
                 f'{mpConfigs[key].SettingID} adapter configuration')
             continue
-        results.append(NetInt(
+        results.append(NetAdap(
             mpConfigs[key].Index,
             mpConfigs[key].InterfaceIndex,
             mpAdapters[key].NetConnectionID,

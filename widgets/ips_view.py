@@ -10,7 +10,7 @@ from tkinter import ttk
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping, NamedTuple
 
 from db import DnsServer, IPRole
-from ntwrk import NetInt
+from ntwrk import NetAdap
 from utils.keyboard import Modifiers
 
 
@@ -224,7 +224,7 @@ class IpsView(ttk.Frame):
             row=1,
             sticky=tk.EW)
     
-    def populate(self, net_int: NetInt, dnses: Iterable[DnsServer]) -> None:
+    def populate(self, net_int: NetAdap, dnses: Iterable[DnsServer]) -> None:
         self._mpCrLbl.clear()
         if net_int.dnsProvided():
             self._mode = _RedrawMode.IPS

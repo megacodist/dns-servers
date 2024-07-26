@@ -19,9 +19,9 @@ from .net_int_view import NetIntView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import NetInt, NetConfigCode
+from ntwrk import NetAdap, NetConfigCode
 from utils.async_ops import AsyncOpManager
-from utils.net_int_monitor import NetIntMonitor
+from utils.net_int_monitor import NetIntMonitor, WmiEvent
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
 
@@ -53,9 +53,9 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         self._db = db
         """The database object."""
-        self._netInts: list[NetInt]
+        self._netInts: list[NetAdap]
         """A list of all network interfaces."""
-        self._q = Queue()
+        self._q = Queue[WmiEvent]()
         self._netIntThrd: NetIntMonitor
         """The thread looking for changes in network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
@@ -357,8 +357,9 @@ class DnsWin(tk.Tk):
                 'Cannot get the geometry of the window.', stack_info=True)
     
     def _onNetIntChanges(self, _: tk.Event) -> None:
+        from pprint import pprint
         event = self._q.get()
-        print(type(event))
+        #print(event)
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
@@ -374,13 +375,13 @@ class DnsWin(tk.Tk):
 
     def _readNetInts(self) -> None:
         """Reads network interfaces."""
-        from utils.funcs import readNetInts
+        from utils.funcs import readNetAdaps
         self._asyncMngr.InitiateOp(
-            start_cb=readNetInts,
+            start_cb=readNetAdaps,
             finish_cb=self._onNetIntsRead,
             widgets=(self._netintvw,))
     
-    def _onNetIntsRead(self, fut: Future[list[NetInt]]) -> None:
+    def _onNetIntsRead(self, fut: Future[list[NetAdap]]) -> None:
         try:
             self._netInts = fut.result()
             self._netintvw.populate(self._netInts)

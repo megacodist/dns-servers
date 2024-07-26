@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable
 
-from ntwrk import NetInt
+from ntwrk import NetAdap
 
 
 class NetIntView(tk.Frame):
@@ -68,13 +68,13 @@ class NetIntView(tk.Frame):
         if self._cbDClick:
             self._cbDClick()
     
-    def _getItemColor(self, net_int: NetInt) -> str:
+    def _getItemColor(self, net_int: NetAdap) -> str:
         if net_int.connectivity():
             return self._canConn
         else:
             return self._noConn
 
-    def populate(self, items: Iterable[NetInt]) -> None:
+    def populate(self, items: Iterable[NetAdap]) -> None:
         self.clear()
         for item in items:
             self._lstbx.insert(tk.END, item.NetConnectionID) # type: ignore
