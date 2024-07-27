@@ -43,7 +43,7 @@ class NetIntDialog(tk.Toplevel):
         self.geometry(f'{width}x{height}')
         self.grab_set()
         #
-        self._netInt = net_int
+        self._netAdap = net_int
         #
         self._sheet = Sheet(self, headers=[_('KEY'), _('VALUE'),])
         self._sheet.column_width(0, key_width)
@@ -113,16 +113,8 @@ class NetIntDialog(tk.Toplevel):
         self.destroy()
     
     def _populate(self) -> None:
-        for attr in self._getNetIntAttrs():
-            self._sheet.insert_row([attr, getattr(self._netInt, attr)])
-    
-    def _getNetIntAttrs(self) -> tuple[str, ...]:
-        attrs = [
-            attr for attr in dir(self._netInt)
-            if not callable(getattr(self._netInt, attr)) and \
-                not attr.startswith('_')]
-        attrs.sort(key=lambda x: x.lower())
-        return tuple(attrs)
+        for attr in self._netAdap.getAttrs():
+            self._sheet.insert_row([attr, getattr(self._netAdap, attr)])
     
     def showDialog(self) -> None:
         """Shows the dialog box and returns a `DnsServer` on completion

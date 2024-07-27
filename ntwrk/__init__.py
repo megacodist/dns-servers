@@ -15,8 +15,26 @@ import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 import re
-from typing import Iterable
+from typing import Any, Iterable
 from uuid import UUID
+
+
+class ConnStatus(enum.Enum):
+    DISCONNECTED = 0
+    CONNECTING = 1
+    CONNECTED = 2
+    DISCONNECTING = 3
+    HARDWARE_NOT_PRESENT = 4
+    HARDWARE_DISABLED = 5
+    HARDWARE_MALFUNCTION = 6
+    MEDIA_DISCONNECTED = 7
+    AUTHENTICATING = 8
+    AUTH_SUCCEEDED = 9
+    """Authentication succeeded"""
+    AUTH_FAILED = 10
+    """Authentication failed"""
+    INVALID_ADDRESS = 11
+    CREDENTIALS_REQUIRED = 12
 
 
 class NetConfigCode(enum.IntEnum):
@@ -191,84 +209,211 @@ class MAC:
         return self._macAddr == "FF:FF:FF:FF:FF:FF"
 
 
-class NetAdap:
+class BaseNetAdap:
+    def __repr__(self) -> str:
+        attrValues = ', '.join(
+            f'{attr[1:]}="{getattr(self, attr)}"'
+            for attr in self.getAttrs(leading_under=True))
+        return f"<{self.__class__.__qualname__} {attrValues}>"
+    
+    def getAttrs(self, leading_under: bool = False) -> tuple[str, ...]:
+        """The attributes of interest of `Win32_NetworkAdapterConfiguration`
+        class.
+        """
+        attrs = [
+            attr
+            for attr in dir(self)
+            if attr.startswith('_') and attr[1].isupper() and not \
+                attr.startswith('__') and not callable(getattr(self, attr))]
+        if not leading_under:
+            attrs = [attr[1:] for attr in attrs]
+        return tuple(attrs)
+
+
+class NetAdap(BaseNetAdap):
     """Instances of this class represent instances of `Win32_NetworkAdapter`
     class on WMI.
     """
-
-    _netAdapAttrs = ('DeviceID', 'Index', 'InterfaceIndex', 'MACAddress', 'GUID',
-        'Description', 'NetConnectionID', 'NetEnabled',)
-    """The attributes of interest of `Win32_NetworkAdapter` class."""
 
     @ classmethod
     def enumAllNetInts(cls) -> list[NetAdap]:
         """Enumerates all network interfaces on this Windows platform."""
         return _enumNetInts()
 
-    def __init__(
-            self,
-            device_id: str,
-            index: int,
-            interface_idx: int,
-            net_conn_id: str,
-            description: str,
-            ip_enabled: bool,
-            dhcp_enabled: bool,
-            ip_addr: tuple[IPv4 | IPv6, ...] | None,
-            dns_order: tuple[IPv4 | IPv6, ...] | None,
-            default_gateway: tuple[IPv4 | IPv6, ...] | None,
-            guid: UUID,
-            mac_addr: MAC | None,
-            dhcp_server: IPv4 | IPv6 | None
-            ) -> None:
-        self.DeviceID = device_id
-        """The Unique identifier of the network adapter from other devices
-        on the system.
+    def __init__(self, obj: Any) -> None:
+        """Initializes an instance of `NetAdap` class with an object that
+        provide necessary attributes. It raises `TypeError` if `obj` does not
+        have enough attributes
         """
-        self.Index = index
-        """Index number of the network adapter, stored in the system
-        registry.
-        """
-        self.InterfaceIndex = interface_idx
-        self.NetConnectionID = net_conn_id
-        """The name of this network interface in the shell."""
-        self.Description = description
-        self.DHCPEnabled = dhcp_enabled
-        """Whether this network interface is configured to obtain obtain
-        its network configuration settings, such as IP address, subnet mask,
-        default gateway, and DNS server addresses; automatically through DHCP.
-        """
-        self.DHCPServer = dhcp_server
-        """Specifies the IP address of the DHCP server that will provide the
-        necessary network configurations."""
-        self.DNSServerSearchOrder = dns_order
-        self.DefaultIPGateway = default_gateway
-        """An optional tuple of IP addresses of default gateways that the
-        computer system uses.
-        """
-        self.MACAddress = mac_addr
-        self.GUID = guid
-        self.IPEnabled = ip_enabled
-        """Specifies whether this network interface can use IP protocol for
-        its network communicatiopns.
-        """
-        self.IPAddress = ip_addr
-        """The optional IP addresses assigned to this network interface.
-        It's a crucial property for identifying and communicating with a
-        device on a network.
-        """
+        try:
+            self._DeviceID: str = obj.DeviceID
+            """The Unique identifier of the network adapter from other
+            devices on the system.
+            """
+            self._Index: int = obj.Index
+            """Index number of the network adapter, stored in the system
+            registry.
+            """
+            self._InterfaceIndex: int = obj.InterfaceIndex
+            self._NetConnectionID: str = obj.NetConnectionID
+            """The name of this network interface in the shell."""
+            self._NetConnectionStatus: int = obj.NetConnectionStatus
+            self._Description: str = obj.Description
+            self._MACAddress: str | None = obj.MACAddress
+            self._GUID: str = obj.GUID
+        except AttributeError as err:
+            raise TypeError(err.args)
+        else:
+            self._configs = list[NetAdapConfig]()
     
-    def __repr__(self) -> str:
-        return (f"<{self.__class__.__qualname__} "
-            f"Index={self.Index} "
-            f"InterfaceIndex={self.InterfaceIndex} "
-            f"NetConnectionID={self.NetConnectionID} "
-            f"Description={self.Description} "
-            f"MACAddress={self.MACAddress} "
-            f"GUID={self.GUID} "
-            f"DHCPEnabled={self.DHCPEnabled} "
-            f"DNSServerSearchOrder={self.DNSServerSearchOrder} "
-            f"DefaultIPGateway={self.DefaultIPGateway}>")
+    @property
+    def Configs(self) -> tuple[NetAdapConfig, ...]:
+        return tuple(self._configs)
+    
+    @property
+    def DeviceID(self) -> str:
+        return self._DeviceID
+    
+    @property
+    def Index(self) -> int:
+        return self._Index
+    
+    @property
+    def InterfaceIndex(self) -> int:
+        return self._InterfaceIndex
+    
+    @property
+    def NetConnectionID(self) -> str:
+        return self._NetConnectionID
+    
+    @property
+    def NetConnectionStatus(self) -> ConnStatus:
+        return ConnStatus(self._NetConnectionStatus)
+    
+    @property
+    def Description(self) -> str:
+        return self._Description
+    
+    @property
+    def MACAddress(self) -> MAC | None:
+        return _toMac(self._MACAddress)
+    
+    @property
+    def GUID(self) -> UUID:
+        return UUID(self._GUID)
+    
+    def connectivity(self) -> bool:
+        """Specifies whether this network interface has the potential
+        interner connectivity.
+        """
+        return any(config.connectivity() for config in self._configs)
+    
+    def dnsProvided(self) -> bool:
+        """Specifies whether this network interface is provided with DNS
+        servers or not.
+        """
+        return any(config.dnsProvided() for config in self._configs)
+    
+    def dhcpAccess(self) -> bool:
+        """Specifies whether this network interface has access to DHCP
+        server.
+        """
+        return any(config.dhcpAccess() for config in self._configs)
+
+
+class NetAdapConfig(BaseNetAdap):
+    """Instances of this class represent instances of
+    `Win32_NetworkAdapterConfiguration` class on WMI.
+    """
+
+    def __init__(self, obj: Any) -> None:
+        """Initializes an instance of `NetAdapConfig` class with an object
+        that provide necessary attributes. It raises `TypeError` if `obj` 
+        does not have enough attributes
+        """
+        try:
+            self._Index: int = obj.Index
+            """A network adapter (an instance of `NetAdap`) can
+            have multiple configuration and each of them has a unique `Index`.
+            """
+            self._InterfaceIndex: int = obj.InterfaceIndex
+            self._IPEnabled: bool = obj.IPEnabled
+            """Specifies whether this network interface can use IP protocol
+            for its network communicatiopns.
+            """
+            self._IPAddress: tuple[str, ...] | None = obj.IPAddress
+            """The optional IP addresses assigned to this network interface.
+            It's a crucial property for identifying and communicating with a
+            device on a network.
+            """
+            self._DHCPEnabled: bool = obj.DHCPEnabled
+            """Whether this network interface is configured to obtain obtain
+            its network configuration settings, such as IP address, subnet
+            mask, default gateway, and DNS server addresses; automatically
+            through DHCP.
+            """
+            self._DHCPServer: str | None = obj.DHCPServer
+            """Specifies the IP address of the DHCP server that will provide
+            the necessary network configurations.
+            """
+            self._DNSServerSearchOrder: tuple[str, ...] | None = \
+                obj.DNSServerSearchOrder
+            self._DefaultIPGateway: tuple[str, ...] | None = obj.DefaultIPGateway
+            """An optional tuple of IP addresses of default gateways that the
+            computer system uses.
+            """
+            self._MACAddress: str | None = obj.MACAddress
+        except AttributeError as err:
+            raise TypeError(err.args)
+    
+    @property
+    def Index(self) -> int:
+        return self._Index
+    
+    @property
+    def InterfaceIndex(self) -> int:
+        return self._InterfaceIndex
+    
+    @property
+    def IPEnabled(self) -> bool:
+        return self._IPEnabled
+    
+    @property
+    def IPAddress(self) -> tuple[IPv4 | IPv6, ...] | None:
+        return _toIpTuple(self._IPAddress)
+    
+    @property
+    def DHCPEnabled(self) -> bool:
+        return self._DHCPEnabled
+    
+    @property
+    def DHCPServer(self) -> IPv4 | IPv6 | None:
+        return _strToIp(self._DHCPServer)
+    
+    @property
+    def DNSServerSearchOrder(self) -> tuple[IPv4 | IPv6, ...] | None:
+        return _toIpTuple(self._DNSServerSearchOrder)
+    
+    @property
+    def DefaultIPGateway(self) -> tuple[IPv4 | IPv6, ...] | None:
+        return _toIpTuple(self._DefaultIPGateway)
+    
+    @property
+    def MACAddress(self) -> MAC | None:
+        return _toMac(self._MACAddress)
+    
+    def getAttrs(self, leading_under: bool = False) -> tuple[str, ...]:
+        """The attributes of interest of `Win32_NetworkAdapterConfiguration`
+        class.
+        """
+        attrs = [
+            attr
+            for attr in dir(self)
+            if attr.startswith('_') and attr[1].isupper() and not \
+                attr.startswith('__') and callable(getattr(self, attr))]
+        if not leading_under:
+            attrs = [attr[1:] for attr in attrs]
+        return tuple(attrs)
     
     def connectivity(self) -> bool:
         """Specifies whether this network interface has the potential
@@ -277,8 +422,8 @@ class NetAdap:
         # Checking whether this network interface uses IP-based
         # communication...
         if self.IPEnabled:
-            return bool(self.IPAddress) and bool(self.MACAddress) and \
-                bool(self.DefaultIPGateway) and (self.dnsProvided() or
+            return bool(self._IPAddress) and bool(self._MACAddress) and \
+                bool(self._DefaultIPGateway) and (self.dnsProvided() or
                 self.dhcpAccess())
         else:
             return False
@@ -301,132 +446,76 @@ class NetAdap:
             ) -> NetConfigCode:
         import wmi
         wmi_ = wmi.WMI()
-        configs = wmi_.Win32_NetworkAdapterConfiguration(Index=self.Index)
+        configs = wmi_.Win32_NetworkAdapterConfiguration(Index=self._Index)
         code: tuple[int] = configs[0].SetDNSServerSearchOrder(
             [str(ip) for ip in ips])
         return NetConfigCode(code[0])
 
 
-class NetAdapConfig:
-    """Instances of this class represent instances of
-    `Win32_NetworkAdapterConfiguration` class on WMI.
-    """
-
-    _netAdapConfigAttrs = ('Index', 'InterfaceIndex', 'MACAddress',
-        'SettingID', 'Description', 'DHCPEnabled', 'DNSServerSearchOrder',
-        'DefaultIPGateway', 'IPEnabled', 'IPAddress', 'DHCPServer',)
-    """The attributes of interest of `Win32_NetworkAdapterConfiguration`
-    class.
-    """
-
-    def __init__(
-            self,
-            index: int,
-            ) -> None:
-        selfIndex = index
-        """A network adapter (an instance of `NetAdap`) can
-        have multiple configuration and each of them has a unique `Index`.
-        """
-
-
 def _enumNetInts() -> list[NetAdap]:
-    from uuid import UUID
     import pythoncom
     import win32com.client
-    from win32com.client import CDispatch
     #
     pythoncom.CoInitialize()
     wmi = win32com.client.GetObject("winmgmts:")
-    # Querying network adapter configurations...
-    configQuery = f"""
-        SELECT
-            {', '.join(NetAdapConfig._netAdapConfigAttrs)}
-        FROM
-            Win32_NetworkAdapterConfiguration"""
-    configs = wmi.ExecQuery(configQuery)
     # Querying network adapters...
     adapsQuery = f"""
         SELECT
-            {', '.join(NetAdap._netAdapAttrs)}
+            *
         FROM
-            Win32_NetworkAdapter"""
-    adapters = wmi.ExecQuery(adapsQuery)
+            Win32_NetworkAdapter
+        WHERE
+            PhysicalAdapter=True"""
+    wmiAdaps = wmi.ExecQuery(adapsQuery)
+    # Querying network adapter configurations...
+    configQuery = f"""
+        SELECT
+            *
+        FROM
+            Win32_NetworkAdapterConfiguration"""
+    wmiConfigs = wmi.ExecQuery(configQuery)
     # Merging results...
-    results = list[NetAdap]()
-    # Firstly, combining using GUID (SettingID)....
-    mpConfigs = dict[UUID, CDispatch]()
-    missCfgs = list[CDispatch]()
-    for cfg in configs:
+    # Converting COM objects into `NetAdap` objects...
+    mpAdapters = dict[int, NetAdap]()
+    missAdaps = list[NetAdap]()
+    badWmiAdaps = False
+    for adap in wmiAdaps:
         try:
-            mpConfigs[UUID(cfg.SettingID)] = cfg
-        except Exception:
-            missCfgs.append(cfg)
-    mpAdapters = dict[UUID, CDispatch]()
-    missAdaps = list[CDispatch]()
-    for adap in adapters:
+            adap = NetAdap(adap)
+        except TypeError:
+            badWmiAdaps = True
+            continue
         try:
-            mpAdapters[UUID(adap.GUID)] = adap
-        except Exception:
+            mpAdapters[int(adap.DeviceID)] = adap
+        except ValueError:
             missAdaps.append(adap)
-    cmnKeys = set(mpConfigs.keys()).intersection(mpAdapters.keys())
-    for key in cmnKeys:
+    if badWmiAdaps:
+        logging.error('some COM objects cannot be converted into "NetAdap"')
+    #
+    missCfgs = list[NetAdapConfig]()
+    badWmiCfgs = False
+    for cfg in wmiConfigs:
         try:
-            ipAddr = _toIpList(mpConfigs[key].IPAddress)
-        except TypeError:
-            logging.error('Invalid IP Address in '
-                f'{mpConfigs[key].SettingID} adapter configuration')
+            cfg = NetAdapConfig(cfg)
+        except  TypeError:
+            badWmiCfgs = True
             continue
         try:
-            dnses = _toIpList(mpConfigs[key].DNSServerSearchOrder)
-        except TypeError:
-            logging.error('Invalid DNS server search order in '
-                f'{mpConfigs[key].SettingID} adapter configuration')
-            continue
-        try:
-            gateway = _toIpList(mpConfigs[key].DefaultIPGateway)
-        except TypeError:
-            logging.error('Invalid default IP Gateway in '
-                f'{mpConfigs[key].SettingID} adapter configuration')
-            continue
-        try:
-            mac = mpConfigs[key].MACAddress
-            if mac is not None:
-                mac = MAC(mac)
-        except TypeError:
-            logging.error('Invalid MAC address in '
-                f'{mpConfigs[key].SettingID} adapter configuration')
-            continue
-        try:
-            dhcpServer = _strToIp(mpConfigs[key].DHCPServer)
-        except TypeError:
-            logging.error('Invalid DHCP server in '
-                f'{mpConfigs[key].SettingID} adapter configuration')
-            continue
-        results.append(NetAdap(
-            mpConfigs[key].Index,
-            mpConfigs[key].InterfaceIndex,
-            mpAdapters[key].NetConnectionID,
-            mpConfigs[key].Description,
-            mpConfigs[key].IPEnabled,
-            mpConfigs[key].DHCPEnabled,
-            ipAddr,
-            dnses,
-            gateway,
-            key,
-            mac,
-            dhcpServer))
-        obj = mpConfigs[key]
-        del obj
-        obj = mpAdapters[key]
-        del obj
-        del mpConfigs[key]
-        del mpAdapters[key]
+            mpAdapters[cfg._InterfaceIndex]._configs.append(cfg)
+        except KeyError:
+            missCfgs.append(cfg)
+    if badWmiCfgs:
+        logging.error(
+            'some COM objects cannot be converted into "NetAdapConfig"')
+    #
+    if missAdaps and missCfgs:
+        print("Merging should've been continued!!!")
     #
     pythoncom.CoUninitialize()
-    return results
+    return list(mpAdapters.values())
 
 
-def _toIpList(
+def _toIpTuple(
         ips: tuple[str, ...] | None,
         ) -> tuple[IPv4 | IPv6, ...] | None:
     """Converts a tuple of strings representing IP addresses to
@@ -465,3 +554,8 @@ def _strToIp(ip: str | None) -> IPv4 | IPv6 | None:
     except AddressValueError:
         raise TypeError(
             f'expected IPv4 or IPv6 but got {ip.__class__.__qualname__}')
+
+
+def _toMac(mac: str | None) -> MAC | None:
+    """Converts an optional MAC address string to `MAC` object."""
+    return mac if mac is None else MAC(mac)

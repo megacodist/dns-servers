@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable
 
-from ntwrk import NetAdap
+from ntwrk import NetAdap, ConnStatus
 
 
 class NetIntView(tk.Frame):
@@ -20,8 +20,8 @@ class NetIntView(tk.Frame):
         super().__init__(master, **kwargs)
         self._cbSelection = selection_cb
         self._cbDClick = d_click_cb
-        self._canConn = 'green'
-        self._noConn = '#ca482e'
+        self._connColor = 'green'
+        self._disconnColor = '#ca482e'
         self._initGui()
         # Bindings...
         self._lstbx.bind("<<ListboxSelect>>", self._onSelection)
@@ -68,11 +68,12 @@ class NetIntView(tk.Frame):
         if self._cbDClick:
             self._cbDClick()
     
-    def _getItemColor(self, net_int: NetAdap) -> str:
-        if net_int.connectivity():
-            return self._canConn
+    def _getItemColor(self, net_adap: NetAdap) -> str:
+        print(repr(net_adap))
+        if net_adap.NetConnectionStatus == ConnStatus.CONNECTED:
+            return self._connColor
         else:
-            return self._noConn
+            return self._disconnColor
 
     def populate(self, items: Iterable[NetAdap]) -> None:
         self.clear()
