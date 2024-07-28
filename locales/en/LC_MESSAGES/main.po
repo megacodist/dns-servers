@@ -101,8 +101,8 @@ msgstr "Unknown HTTP status code"
 msgid "DNS_SERVERS"
 msgstr "DNS servers"
 
-msgid "NET_INTS"
-msgstr "Network interfaces"
+msgid "NET_ADAPS"
+msgstr "Network adapters"
 
 msgid "SHOW_NET_INT_INFO"
 msgstr "Show interface info"
@@ -197,8 +197,14 @@ msgstr "The {} is invalid."
 msgid "DUP_DNS_IP"
 msgstr "The {} address already exists in {}."
 
-msgid "NET_INT_DHCP"
-msgstr "This network resolves URLs through DHCP."
+msgid "NO_ADAP_CONFIG"
+msgstr "This network adapter has no configuration."
+
+msgid "MANY_ADAP_CONFIGS"
+msgstr "This network adapter has more than one configuration. Please select one of them."
+
+msgid "NET_ADAP_DHCP"
+msgstr "This network adapter resolves URLs through DHCP."
 
 msgid "NO_DHCP_NO_DNS"
-msgstr "This network interface has neither static DNS servers nor DHCP access."
+msgstr "This network adapter has neither static DNS servers nor DHCP access."

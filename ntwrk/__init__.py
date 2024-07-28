@@ -14,6 +14,7 @@ from __future__ import annotations
 import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
+from os import PathLike
 import re
 from typing import Any, Iterable
 from uuid import UUID
@@ -238,7 +239,7 @@ class NetAdap(BaseNetAdap):
     @ classmethod
     def enumAllNetInts(cls) -> list[NetAdap]:
         """Enumerates all network interfaces on this Windows platform."""
-        return _enumNetInts()
+        return _enumNetAdaps()
 
     def __init__(self, obj: Any) -> None:
         """Initializes an instance of `NetAdap` class with an object that
@@ -250,6 +251,8 @@ class NetAdap(BaseNetAdap):
             """The Unique identifier of the network adapter from other
             devices on the system.
             """
+            self._Caption: str = obj.Caption
+            """A short description of the instance, a one-line string."""
             self._Index: int = obj.Index
             """Index number of the network adapter, stored in the system
             registry.
@@ -273,6 +276,10 @@ class NetAdap(BaseNetAdap):
     @property
     def DeviceID(self) -> str:
         return self._DeviceID
+    
+    @property
+    def Caption(self) -> str:
+        return self._Caption
     
     @property
     def Index(self) -> int:
@@ -332,6 +339,8 @@ class NetAdapConfig(BaseNetAdap):
         does not have enough attributes
         """
         try:
+            self._Caption: str = obj.Caption
+            """A short description of the instance, a one-line string."""
             self._Index: int = obj.Index
             """A network adapter (an instance of `NetAdap`) can
             have multiple configuration and each of them has a unique `Index`.
@@ -365,6 +374,10 @@ class NetAdapConfig(BaseNetAdap):
             self._MACAddress: str | None = obj.MACAddress
         except AttributeError as err:
             raise TypeError(err.args)
+    
+    @property
+    def Caption(self) -> str:
+        return self._Caption
     
     @property
     def Index(self) -> int:
@@ -401,19 +414,6 @@ class NetAdapConfig(BaseNetAdap):
     @property
     def MACAddress(self) -> MAC | None:
         return _toMac(self._MACAddress)
-    
-    def getAttrs(self, leading_under: bool = False) -> tuple[str, ...]:
-        """The attributes of interest of `Win32_NetworkAdapterConfiguration`
-        class.
-        """
-        attrs = [
-            attr
-            for attr in dir(self)
-            if attr.startswith('_') and attr[1].isupper() and not \
-                attr.startswith('__') and callable(getattr(self, attr))]
-        if not leading_under:
-            attrs = [attr[1:] for attr in attrs]
-        return tuple(attrs)
     
     def connectivity(self) -> bool:
         """Specifies whether this network interface has the potential
@@ -452,7 +452,7 @@ class NetAdapConfig(BaseNetAdap):
         return NetConfigCode(code[0])
 
 
-def _enumNetInts() -> list[NetAdap]:
+def _enumNetAdaps() -> list[NetAdap]:
     import pythoncom
     import win32com.client
     #
@@ -467,6 +467,7 @@ def _enumNetInts() -> list[NetAdap]:
         WHERE
             PhysicalAdapter=True"""
     wmiAdaps = wmi.ExecQuery(adapsQuery)
+    #_saveWmiObj(wmiAdaps, r'H:\foo2-adapters.txt') # type: ignore
     # Querying network adapter configurations...
     configQuery = f"""
         SELECT
@@ -474,9 +475,10 @@ def _enumNetInts() -> list[NetAdap]:
         FROM
             Win32_NetworkAdapterConfiguration"""
     wmiConfigs = wmi.ExecQuery(configQuery)
+    #_saveWmiObj(wmiConfigs, r'H:\foo2-configs.txt') # type: ignore
     # Merging results...
     # Converting COM objects into `NetAdap` objects...
-    mpAdapters = dict[int, NetAdap]()
+    mpAdapters = dict[str, NetAdap]()
     missAdaps = list[NetAdap]()
     badWmiAdaps = False
     for adap in wmiAdaps:
@@ -486,7 +488,7 @@ def _enumNetInts() -> list[NetAdap]:
             badWmiAdaps = True
             continue
         try:
-            mpAdapters[int(adap.DeviceID)] = adap
+            mpAdapters[adap.Caption] = adap
         except ValueError:
             missAdaps.append(adap)
     if badWmiAdaps:
@@ -501,7 +503,7 @@ def _enumNetInts() -> list[NetAdap]:
             badWmiCfgs = True
             continue
         try:
-            mpAdapters[cfg._InterfaceIndex]._configs.append(cfg)
+            mpAdapters[cfg._Caption]._configs.append(cfg)
         except KeyError:
             missCfgs.append(cfg)
     if badWmiCfgs:
@@ -559,3 +561,26 @@ def _strToIp(ip: str | None) -> IPv4 | IPv6 | None:
 def _toMac(mac: str | None) -> MAC | None:
     """Converts an optional MAC address string to `MAC` object."""
     return mac if mac is None else MAC(mac)
+
+
+def _saveWmiObj(wmi_objs: Iterable[Any], file_name: PathLike[str]) -> None:
+    from os import fspath
+    with open(fspath(file_name), mode='wt') as fileObj:
+        for adap in wmi_objs:
+            mpNameValue = _objToNameValue(adap)
+            width = max(len(name) for name in mpNameValue.keys())
+            fileObj.write('\n\n' + ('=' * 40))
+            for name, value in mpNameValue.items():
+                fileObj.write(f'\n{name:>{width}}  {value}')
+
+
+def _objToNameValue(obj: Any) -> dict[str, Any]:
+    mpNameValue = dict[str, Any]()
+    for attrName in dir(obj):
+        if not attrName.startswith('_'):
+            attrValue = getattr(obj, attrName)
+            if not callable(attrValue):
+                mpNameValue[attrName] = attrValue
+    names = list(mpNameValue.keys())
+    sorted(names, key=lambda x: x.lower())
+    return {name:mpNameValue[name] for name in names}

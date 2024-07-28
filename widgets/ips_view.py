@@ -10,7 +10,7 @@ from tkinter import ttk
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping, NamedTuple
 
 from db import DnsServer, IPRole
-from ntwrk import NetAdap
+from ntwrk import NetAdap, NetAdapConfig
 from utils.keyboard import Modifiers
 
 
@@ -146,9 +146,9 @@ class IpsView(ttk.Frame):
         self._selection = list[int]()
         """The list of all selected IPs index."""
         self._mode = _RedrawMode.NONE
-        self._ips: Iterable[IPv4 | IPv6] = tuple()
-        self._nmRoles: Iterable[tuple[str, tuple[IPRole | None, ...]]] = tuple()
-        self._msg = ''
+        self._ips = list[IPv4 | IPv6]()
+        self._nmRoles = list[tuple[str, tuple[IPRole | None, ...]]]()
+        self._msg: str = ''
         self._mpCrLbl = dict[_CR, ttk.Label]()
         """The between matrix positions and labels:
         
@@ -224,35 +224,67 @@ class IpsView(ttk.Frame):
             row=1,
             sticky=tk.EW)
     
-    def populate(self, net_int: NetAdap, dnses: Iterable[DnsServer]) -> None:
+    def clear(self) -> None:
+        self._mode = _RedrawMode.NONE
+        self._selection.clear()
         self._mpCrLbl.clear()
-        if net_int.dnsProvided():
-            self._mode = _RedrawMode.IPS
-            ips = net_int.DNSServerSearchOrder
-            if not ips:
-                # `ips` is either `None` or empty...
-                self._ips = tuple()
-                self._redrawRoles()
-            else:
-                self._ips = ips
-                nmRoles = list[tuple[str, tuple[IPRole | None, ...]]]()
-                for dns in dnses:
-                    roles = [dns.getRole(ip) for ip in ips]
-                    if any(roles):
-                        nmRoles.append((dns.name, tuple(roles),))
-                nmRoles.sort(key=lambda x: len(x[1]))
-                self._nmRoles = nmRoles
-                self._redrawRoles()
-        else:
-            self._mode = _RedrawMode.MSG
-            if  net_int.dhcpAccess():
-                self._msg = _('NET_INT_DHCP')
-                self._redrawMsg()
-            else:
-                self._msg = _('NO_DHCP_NO_DNS')
-                self._redrawMsg()
+        self._cnvs.delete('all')
+        self._msg = ''
+        self._ips.clear()
+        self._nmRoles.clear()
     
-    def _Redraw(self) -> None:
+    def populate(
+            self,
+            net_adap: NetAdap,
+            dnses: Iterable[DnsServer],
+            config_idx: int | None = None,
+            ) -> None:
+        self.clear()
+        if len(net_adap.Configs) == 0:
+            self._mode = _RedrawMode.MSG
+            self._msg = _('NO_ADAP_CONFIG')
+        elif len(net_adap.Configs) == 1:
+            if net_adap.Configs[0].DNSServerSearchOrder is not None:
+                self._mode = _RedrawMode.IPS
+                self._populateTable(net_adap.Configs[0], dnses)
+            else:
+                self._mode = _RedrawMode.MSG
+                if  net_adap.dhcpAccess():
+                    self._msg = _('NET_ADAP_DHCP')
+                else:
+                    self._msg = _('NO_DHCP_NO_DNS')
+        else:
+            try:
+                config = net_adap.Configs[config_idx] # type: ignore
+            except (IndexError, TypeError):
+                self._mode = _RedrawMode.MSG
+                self._msg = _('MANY_ADAP_CONFIGS')
+            else:
+                self._populateTable(config, dnses)
+                self._mode = _RedrawMode.IPS
+        self._redraw()
+    
+    def _populateTable(
+            self,
+            net_config: NetAdapConfig,
+            dnses: Iterable[DnsServer],
+            ) -> None:
+        """Populates the IP table in IPs mode."""
+        self._ips.clear()
+        self._nmRoles.clear()
+        ips = net_config.DNSServerSearchOrder
+        if not ips:
+            # `ips` is either `None` or empty...
+            self._redrawRoles()
+        else:
+            self._ips = list(ips)
+            for dns in dnses:
+                roles = [dns.getRole(ip) for ip in ips]
+                if any(roles):
+                    self._nmRoles.append((dns.name, tuple(roles),))
+            self._nmRoles.sort(key=lambda x: len(x[1]))
+    
+    def _redraw(self) -> None:
         if self._mode == _RedrawMode.MSG:
             self._redrawMsg()
         elif self._mode == _RedrawMode.IPS:
@@ -421,11 +453,6 @@ class IpsView(ttk.Frame):
     def _getCnvsHeight(self) -> int:
         bd = max([2, int(self._cnvs.cget('borderwidth')),])
         return self._cnvs.winfo_height() - (2 * bd)
-    
-    def clear(self) -> None:
-        self._mode = _RedrawMode.NONE
-        self._selection.clear()
-        self._cnvs.delete('all')
     
     def deselect(self) -> None:
         """Deselects all the selected IPs if any."""
