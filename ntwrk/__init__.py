@@ -20,6 +20,22 @@ from typing import Any, Iterable
 from uuid import UUID
 
 
+class ACIdx:
+    @classmethod
+    def fromSeq(cls, cfg) -> ACIdx:
+        pass
+
+    def __init__(self, a_idx: int, c_idx: int | None,) -> None:
+        self.adapIdx = a_idx
+        self.cfgIdx = c_idx
+    
+    def nextIdx(self) -> ACIdx:
+        """Returns next index in a `Sequence[NetAdap]`."""
+        aIdx = self.adapIdx
+        cIdx = 0 if self.cfgIdx is None else self.cfgIdx + 1
+        return ACIdx(aIdx, cIdx)
+
+
 class ConnStatus(enum.Enum):
     DISCONNECTED = 0
     CONNECTING = 1
@@ -229,6 +245,28 @@ class BaseNetAdap:
         if not leading_under:
             attrs = [attr[1:] for attr in attrs]
         return tuple(attrs)
+    
+    def update(self, wmi_obj: Any) -> bool:
+        """Updates this object with the provided"""
+        selfChanges = dict[str, Any]()
+        changed = False
+        for attr in self.getAttrs(leading_under=True):
+            selfAttr = getattr(self, attr)
+            try:
+                objAttr = getattr(wmi_obj, attr)
+            except AttributeError:
+                break
+            if selfAttr != objAttr:
+                setattr(self, attr, objAttr)
+                selfChanges[attr] = objAttr
+                changed = True
+        else:
+            return changed
+        # The provided `obj` does not have required attributes
+        # Rolling back changes...
+        for attr in selfChanges.keys():
+            setattr(self, attr, selfChanges[attr])
+        return False
 
 
 class NetAdap(BaseNetAdap):
@@ -247,6 +285,7 @@ class NetAdap(BaseNetAdap):
         have enough attributes
         """
         try:
+            self._Description: str = obj.Description
             self._DeviceID: str = obj.DeviceID
             """The Unique identifier of the network adapter from other
             devices on the system.
@@ -261,7 +300,6 @@ class NetAdap(BaseNetAdap):
             self._NetConnectionID: str = obj.NetConnectionID
             """The name of this network interface in the shell."""
             self._NetConnectionStatus: int = obj.NetConnectionStatus
-            self._Description: str = obj.Description
             self._MACAddress: str | None = obj.MACAddress
             self._GUID: str = obj.GUID
         except AttributeError as err:
@@ -309,6 +347,15 @@ class NetAdap(BaseNetAdap):
     def GUID(self) -> UUID:
         return UUID(self._GUID)
     
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, NetAdap):
+            return NotImplemented
+        return all([
+            self._Description == value._Description,
+            self._DeviceID == value._DeviceID,
+            self._Caption == value._Caption,
+            self._Index == value._Index,])
+    
     def connectivity(self) -> bool:
         """Specifies whether this network interface has the potential
         interner connectivity.
@@ -341,6 +388,7 @@ class NetAdapConfig(BaseNetAdap):
         try:
             self._Caption: str = obj.Caption
             """A short description of the instance, a one-line string."""
+            self._SettingID: str = obj.SettingID
             self._Index: int = obj.Index
             """A network adapter (an instance of `NetAdap`) can
             have multiple configuration and each of them has a unique `Index`.
@@ -380,6 +428,10 @@ class NetAdapConfig(BaseNetAdap):
         return self._Caption
     
     @property
+    def SettingID(self) -> UUID:
+        return UUID(self._SettingID)
+    
+    @property
     def Index(self) -> int:
         return self._Index
     
@@ -414,6 +466,15 @@ class NetAdapConfig(BaseNetAdap):
     @property
     def MACAddress(self) -> MAC | None:
         return _toMac(self._MACAddress)
+    
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, NetAdapConfig):
+            return NotImplemented
+        return all([
+            self._Caption == value._Caption,
+            self._SettingID == value._SettingID,
+            self._Index == value._Index,
+            self._InterfaceIndex == value._InterfaceIndex,])
     
     def connectivity(self) -> bool:
         """Specifies whether this network interface has the potential

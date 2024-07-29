@@ -34,7 +34,7 @@ class NetAdapView(tk.Frame):
         self._NAME_COL_IDX = 1
         self._initGui(name_col_width)
         # Bindings...
-        self._trvw.bind("<<ListboxSelect>>", self._onSelection)
+        self._trvw.bind("<<TreeviewSelect>>", self._onSelection)
         self._trvw.bind('<Double-1>', self._onDoubleClicked)
     
     def _initGui(self, name_col_width: int) -> None:
@@ -68,7 +68,7 @@ class NetAdapView(tk.Frame):
             sticky=tk.EW)
         # Format columns
         self._trvw.config(columns=(self._NAME_COL_IDX,))
-        self._trvw.column('#0', width=0, stretch=tk.NO)  # Hidden column for tree structure
+        self._trvw.column('#0', width=20, stretch=tk.NO)  # Hidden column for tree structure
         self._trvw.column(
             self._NAME_COL_IDX,
             anchor=tk.W,
@@ -93,21 +93,32 @@ class NetAdapView(tk.Frame):
         else:
             return self._disconnColor
 
-    def populate(self, items: Iterable[NetAdap]) -> None:
+    def populate(self, net_adaps: Iterable[NetAdap]) -> None:
         self.clear()
-        for idx, item in enumerate(items):
-            sIdx = f'{idx}'
-            iid = self._trvw.insert(
+        for adapIdx, adap in enumerate(net_adaps):
+            sAdapIdx = str(adapIdx)
+            sAdapIid = self._trvw.insert(
                 parent='',
                 index=tk.END,
-                iid=sIdx,
-                text=item.NetConnectionID) # type: ignore
-            if sIdx != iid:
-                self._mpIidIdx[iid] = (idx, None,)
+                iid=sAdapIdx,
+                values=(adap.NetConnectionID,)) # type: ignore
+            if sAdapIdx != sAdapIid:
+                self._mpIidIdx[sAdapIid] = (adapIdx, None,)
+            #
+            for configIdx, config in enumerate(adap.Configs):
+                sConfigIdx = f'{sAdapIid}-{configIdx}'
+                sConfigIid = self._trvw.insert(
+                    parent=sAdapIid,
+                    index=tk.END,
+                    iid=sConfigIdx,
+                    values=(str(config.Index),))
+                if sConfigIid != sConfigIdx:
+                    self._mpIidIdx[sConfigIid] = (adapIdx, configIdx)
     
     def clear(self) -> None:
-        self._trvw.delete(0, tk.END)
         self._mpIidIdx.clear()
+        for child in self._trvw.get_children(''):
+            self._trvw.delete(child)
     
     def getSelectedIdx(self) -> tuple[int, int | None] | None:
         """Gets the index of selected interface."""

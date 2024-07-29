@@ -9,7 +9,7 @@ from typing import Callable, TYPE_CHECKING, NamedTuple
 
 from tksheet import Sheet
 
-from ntwrk import NetAdap
+from ntwrk import NetAdap, NetAdapConfig
 
 
 if TYPE_CHECKING:
@@ -25,11 +25,12 @@ class NetIntDlgSettings(NamedTuple):
     value_int: int
 
 
-class NetIntDialog(tk.Toplevel):
+class WmiNetDialog(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            net_int: NetAdap,
+            net_adap: NetAdap,
+            config_idx: int | None,
             *,
             xy: tuple[int, int] | None = None,
             width: int = 400,
@@ -38,12 +39,10 @@ class NetIntDialog(tk.Toplevel):
             value_width: int = 180,
             ) -> None:
         super().__init__(master)
-        self.title(net_int.NetConnectionID)
+        self.title(net_adap.NetConnectionID)
         self.resizable(True, True)
         self.geometry(f'{width}x{height}')
         self.grab_set()
-        #
-        self._netAdap = net_int
         #
         self._sheet = Sheet(self, headers=[_('KEY'), _('VALUE'),])
         self._sheet.column_width(0, key_width)
@@ -71,7 +70,7 @@ class NetIntDialog(tk.Toplevel):
             height,
             key_width,
             value_width)
-        self._populate()
+        self._populate(net_adap, config_idx)
         if xy is None:
             self.after(10, self._centerDialog, master)
         else:
@@ -108,13 +107,20 @@ class NetIntDialog(tk.Toplevel):
                 int(colsWidths[1]),)
         else:
             logging.error(
-                'Cannot get the geometry of the NetIntDialog.',
+                'Cannot get the geometry of the WmiNetDialog.',
                 stack_info=True)
         self.destroy()
     
-    def _populate(self) -> None:
-        for attr in self._netAdap.getAttrs():
-            self._sheet.insert_row([attr, getattr(self._netAdap, attr)])
+    def _populate(
+            self,
+            net_adap: NetAdap,
+            confgi_idx: int | None,
+            ) -> None:
+        from ntwrk import BaseNetAdap
+        baseNet: BaseNetAdap = net_adap if confgi_idx is None else \
+            net_adap.Configs[confgi_idx]
+        for attr in baseNet.getAttrs():
+            self._sheet.insert_row([attr, getattr(baseNet, attr)])
     
     def showDialog(self) -> None:
         """Shows the dialog box and returns a `DnsServer` on completion

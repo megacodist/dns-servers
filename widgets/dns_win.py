@@ -53,7 +53,7 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         self._db = db
         """The database object."""
-        self._netInts: list[NetAdap]
+        self._netAdaps: list[NetAdap]
         """A list of all network interfaces."""
         self._qNetAdap = Queue[NetAdap]()
         self._qNetConfig = Queue[NetAdapConfig]()
@@ -153,17 +153,17 @@ class DnsWin(tk.Tk):
         self._pwin_netIntIps.pack(fill=tk.BOTH, expand=True)
         self._pwin_leftRight.add(self._pwin_netIntIps, weight=1)
         #
-        self._lfrm_netInts = ttk.Labelframe(
+        self._lfrm_netAdaps = ttk.Labelframe(
             self._pwin_netIntIps,
             text=_('NET_ADAPS'))
-        self._lfrm_netInts.pack(fill=tk.BOTH, expand=True)
-        self._pwin_netIntIps.add(self._lfrm_netInts, weight=1)
+        self._lfrm_netAdaps.pack(fill=tk.BOTH, expand=True)
+        self._pwin_netIntIps.add(self._lfrm_netAdaps, weight=1)
         #
-        self._netintvw = NetAdapView(
-            self._lfrm_netInts,
+        self._adapsvw = NetAdapView(
+            self._lfrm_netAdaps,
             self._readDnsInfo,
             self._showNetAdapInfo)
-        self._netintvw.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
+        self._adapsvw.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         #
         self._lfrm_ips = ttk.LabelFrame(self._pwin_netIntIps)
         self._lfrm_ips.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
@@ -275,16 +275,16 @@ class DnsWin(tk.Tk):
             label=_('QUIT'),
             command=self._onWinClosing)
         # Creating `Adapters` menu...
-        self._menu_netints = tk.Menu(
+        self._menu_netAdaps = tk.Menu(
             master=self._menubar,
             tearoff=0)
         self._menubar.add_cascade(
             label=_('NET_ADAPS'),
-            menu=self._menu_netints)
-        self._menu_netints.add_cascade(
+            menu=self._menu_netAdaps)
+        self._menu_netAdaps.add_cascade(
             label=_('READ_INTERFACES'),
             command=self._readNetAdaps)
-        self._menu_netints.add_cascade(
+        self._menu_netAdaps.add_cascade(
             label=_('SHOW_NET_INT_INFO'),
             command=self._showNetAdapInfo)
         # Creating `Commands` menu...
@@ -360,7 +360,19 @@ class DnsWin(tk.Tk):
     
     def _onNetAdapChanged(self, _: tk.Event) -> None:
         netAdap = self._qNetAdap.get()
-        print(repr(netAdap))
+        try:
+            adapIdx = self._netAdaps.index(netAdap)
+        except ValueError:
+            logging.info(
+                'NetAdap change does not have any peer in the App.',
+                repr(netAdap),
+                stack_info=True,)
+            return
+        changed = self._netAdaps[adapIdx].update(netAdap)
+        if changed:
+            print('a NetAdap changes')
+        else:
+            print('no any important change')
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         netConfig = self._qNetConfig.get()
@@ -375,9 +387,9 @@ class DnsWin(tk.Tk):
         if idx is None:
             self._ipsvw.clear()
             return
-        self._lfrm_ips.config(text=self._netInts[idx[0]].NetConnectionID)
+        self._lfrm_ips.config(text=self._netAdaps[idx[0]].NetConnectionID)
         self._ipsvw.populate(
-            self._netInts[idx[0]],
+            self._netAdaps[idx[0]],
             self._mpNameDns.values(),
             idx[1])
 
@@ -387,12 +399,12 @@ class DnsWin(tk.Tk):
         self._asyncMngr.InitiateOp(
             start_cb=readNetAdaps,
             finish_cb=self._onNetAdapsRead,
-            widgets=(self._netintvw,))
+            widgets=(self._adapsvw,))
     
     def _onNetAdapsRead(self, fut: Future[list[NetAdap]]) -> None:
         try:
-            self._netInts = fut.result()
-            self._netintvw.populate(self._netInts)
+            self._netAdaps = fut.result()
+            self._adapsvw.populate(self._netAdaps)
         except CancelledError:
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_INTERFACES')),
@@ -434,7 +446,7 @@ class DnsWin(tk.Tk):
         """Gets the selected network interface index. If nothing is
         selected, it informs the user and returns `None`.
         """
-        idx = self._netintvw.getSelectedIdx()
+        idx = self._adapsvw.getSelectedIdx()
         if idx is None:
             self._msgvw.AddMessage(
                 _('SELECT_ITEM_INTER_VIEW'),
@@ -447,10 +459,11 @@ class DnsWin(tk.Tk):
         if idx is None:
             return
         #
-        from widgets.net_int_dialog import NetIntDialog, NetIntDlgSettings
-        netIntDlg = NetIntDialog(
+        from widgets.net_int_dialog import WmiNetDialog
+        netIntDlg = WmiNetDialog(
             self,
-            self._netInts[idx],
+            self._netAdaps[idx[0]],
+            idx[1],
             xy=(self._settings.nid_x, self._settings.nid_y,),
             width=self._settings.nid_width,
             height=self._settings.nid_height,
@@ -473,7 +486,7 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('SETTING_DNS')),
                 type_=MessageType.INFO)
         else:
-            self._readDnsInfo(self._netintvw.getSelectedIdx())
+            self._readDnsInfo(self._adapsvw.getSelectedIdx())
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
@@ -554,7 +567,7 @@ class DnsWin(tk.Tk):
                 'Select IPs individually or entire rows.',
                 type_=MessageType.ERROR)
             return
-        code = self._netInts[netIntIdx].setDnsSearchOrder(ips)
+        code = self._netAdaps[netIntIdx].setDnsSearchOrder(ips)
         if code != NetConfigCode.SUCCESSFUL:
             self._msgvw.AddMessage(code.name)
     
@@ -567,7 +580,7 @@ class DnsWin(tk.Tk):
         from widgets.url_dialog import UrlDialog
         dnsDialog = UrlDialog(
             self,
-            self._netInts[idx].NetConnectionID,
+            self._netAdaps[idx].NetConnectionID,
             self._mpNameDns,
             self._IMG_GTICK,
             self._IMG_REDX,
