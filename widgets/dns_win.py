@@ -19,7 +19,7 @@ from .net_adap_view import NetAdapView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import NetAdap, NetAdapConfig, NetConfigCode
+from ntwrk import ACIdx, NetAdap, NetAdapConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
 from utils.net_int_monitor import NetIntMonitor
 from utils.settings import AppSettings
@@ -370,28 +370,44 @@ class DnsWin(tk.Tk):
             return
         changed = self._netAdaps[adapIdx].update(netAdap)
         if changed:
-            print('a NetAdap changes')
+            print('a NetAdap changed')
         else:
-            print('no any important change')
+            print('no important change in the NetAdap')
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         netConfig = self._qNetConfig.get()
-        print(repr(netConfig))
+        try:
+            cfgIdx = ACIdx.fromSeq(netConfig, self._netAdaps)
+        except IndexError:
+            logging.info(
+                'NetAdapCondif change does not have any peer in the App.',
+                repr(netConfig),
+                stack_info=True,)
+            return
+        changed = self._netAdaps[cfgIdx.adapIdx].Configs[
+            cfgIdx.cfgIdx].update(netConfig) # type: ignore
+        if not changed:
+            print('no important change in the NetAdapConfig')
+            return
+        #
+        print('a NetAdapConfig changed')
+            
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
         self._readNetAdaps()
         self._readDnses()
     
-    def _readDnsInfo(self, idx: tuple[int, int | None] | None) -> None:
+    def _readDnsInfo(self, idx: ACIdx | None) -> None:
         if idx is None:
             self._ipsvw.clear()
             return
-        self._lfrm_ips.config(text=self._netAdaps[idx[0]].NetConnectionID)
+        self._lfrm_ips.config(
+            text=self._netAdaps[idx.adapIdx].NetConnectionID)
         self._ipsvw.populate(
-            self._netAdaps[idx[0]],
+            self._netAdaps[idx.adapIdx],
             self._mpNameDns.values(),
-            idx[1])
+            idx.cfgIdx)
 
     def _readNetAdaps(self) -> None:
         """Reads network interfaces."""
@@ -442,7 +458,7 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
     
-    def _getNetAdapIdx(self) -> tuple[int, int | None] | None:
+    def _getNetAdapIdx(self) -> ACIdx | None:
         """Gets the selected network interface index. If nothing is
         selected, it informs the user and returns `None`.
         """
@@ -462,8 +478,8 @@ class DnsWin(tk.Tk):
         from widgets.net_int_dialog import WmiNetDialog
         netIntDlg = WmiNetDialog(
             self,
-            self._netAdaps[idx[0]],
-            idx[1],
+            self._netAdaps,
+            idx,
             xy=(self._settings.nid_x, self._settings.nid_y,),
             width=self._settings.nid_width,
             height=self._settings.nid_height,

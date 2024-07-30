@@ -16,14 +16,46 @@ from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from os import PathLike
 import re
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 from uuid import UUID
 
 
 class ACIdx:
+    """This class specifies the index of a `NetAdapConfig` in a sequence
+    of `NetAdap`.
+    """
     @classmethod
-    def fromSeq(cls, cfg) -> ACIdx:
-        pass
+    def fromSeq(
+            cls,
+            cfg: NetAdapConfig,
+            seq: Sequence[NetAdap],
+            start: ACIdx | None = None,
+            ) -> ACIdx:
+        """Searches for a network adapter configuration in a sequence of
+        network adapters. It is possible to specify a starting point for
+        search. It raises `IndexError` if it does not find it.
+        """
+        if start is None:
+            aIdx, cIdx = 0, 0
+        else:
+            aIdx = start.adapIdx
+            cIdx = 0 if start.cfgIdx is None else start.cfgIdx + 1
+        #
+        while True:
+            try:
+                adap = seq[aIdx]
+            except IndexError as err:
+                raise err
+            else:
+                while True:
+                    try:
+                        if cfg == adap.Configs[cIdx]:
+                            return ACIdx(aIdx, cIdx)
+                    except IndexError:
+                        break
+                    else:
+                        cIdx += 1
+                aIdx += 1
 
     def __init__(self, a_idx: int, c_idx: int | None,) -> None:
         self.adapIdx = a_idx

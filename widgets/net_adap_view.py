@@ -7,7 +7,7 @@ import tkinter as tk
 from tkinter import ttk
 from typing import Callable, Iterable, TYPE_CHECKING
 
-from ntwrk import NetAdap, ConnStatus
+from ntwrk import ACIdx, NetAdap, ConnStatus
 
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ class NetAdapView(tk.Frame):
     def __init__(
             self,
             master: tk.Misc,
-            selection_cb: Callable[[tuple[int, int | None] | None], None] | \
+            selection_cb: Callable[[ACIdx | None], None] | \
                 None = None,
             d_click_cb: Callable[[], None] | None = None,
             *,
@@ -30,7 +30,7 @@ class NetAdapView(tk.Frame):
         self._cbDClick = d_click_cb
         self._connColor = 'green'
         self._disconnColor = '#ca482e'
-        self._mpIidIdx = dict[str, tuple[int, int | None]]()
+        self._mpIidIdx = dict[str, ACIdx]()
         self._NAME_COL_IDX = 1
         self._initGui(name_col_width)
         # Bindings...
@@ -103,7 +103,7 @@ class NetAdapView(tk.Frame):
                 iid=sAdapIdx,
                 values=(adap.NetConnectionID,)) # type: ignore
             if sAdapIdx != sAdapIid:
-                self._mpIidIdx[sAdapIid] = (adapIdx, None,)
+                self._mpIidIdx[sAdapIid] = ACIdx(adapIdx, None,)
             #
             for configIdx, config in enumerate(adap.Configs):
                 sConfigIdx = f'{sAdapIid}-{configIdx}'
@@ -113,14 +113,14 @@ class NetAdapView(tk.Frame):
                     iid=sConfigIdx,
                     values=(str(config.Index),))
                 if sConfigIid != sConfigIdx:
-                    self._mpIidIdx[sConfigIid] = (adapIdx, configIdx)
+                    self._mpIidIdx[sConfigIid] = ACIdx(adapIdx, configIdx)
     
     def clear(self) -> None:
         self._mpIidIdx.clear()
         for child in self._trvw.get_children(''):
             self._trvw.delete(child)
     
-    def getSelectedIdx(self) -> tuple[int, int | None] | None:
+    def getSelectedIdx(self) -> ACIdx | None:
         """Gets the index of selected interface."""
         selection = self._trvw.selection()
         match len(selection):
@@ -131,20 +131,22 @@ class NetAdapView(tk.Frame):
                 try:
                     return self._mpIidIdx[iid]
                 except KeyError:
-                    return self._iidToTuple(iid)
+                    return self._iidToAcidx(iid)
             case _:
                 logging.error(
                     'more than one item in the Dnsview is selected',
                     stack_info=True,)
 
-    def _iidToTuple(self, iid: str) -> tuple[int, int | None] | None:
+    def _iidToAcidx(self, iid: str) -> ACIdx | None:
         parts = iid.split('-')
         match len(parts):
             case 1:
-                return (int(parts[0]), None,)
+                return ACIdx(int(parts[0]), None,)
             case 2:
-                return (int(parts[0]), int(parts[1]),)
+                return ACIdx(int(parts[0]), int(parts[1]),)
             case _:
                 logging.error(
                     'invalid number of dash-separated parts of iid',
                     stack_info=True,)
+    
+    def update(self, base_net:)

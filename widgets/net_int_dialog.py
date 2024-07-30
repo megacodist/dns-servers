@@ -5,11 +5,11 @@
 import logging
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, TYPE_CHECKING, NamedTuple
+from typing import Callable, TYPE_CHECKING, NamedTuple, Sequence
 
 from tksheet import Sheet
 
-from ntwrk import NetAdap, NetAdapConfig
+from ntwrk import ACIdx, NetAdap
 
 
 if TYPE_CHECKING:
@@ -29,8 +29,8 @@ class WmiNetDialog(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            net_adap: NetAdap,
-            config_idx: int | None,
+            net_adaps: Sequence[NetAdap],
+            idx: ACIdx,
             *,
             xy: tuple[int, int] | None = None,
             width: int = 400,
@@ -39,10 +39,13 @@ class WmiNetDialog(tk.Toplevel):
             value_width: int = 180,
             ) -> None:
         super().__init__(master)
-        self.title(net_adap.NetConnectionID)
+        self.title(net_adaps[idx.adapIdx].NetConnectionID)
         self.resizable(True, True)
         self.geometry(f'{width}x{height}')
         self.grab_set()
+        #
+        self._adaps: Sequence[NetAdap]
+        self._idx: ACIdx
         #
         self._sheet = Sheet(self, headers=[_('KEY'), _('VALUE'),])
         self._sheet.column_width(0, key_width)
@@ -70,13 +73,23 @@ class WmiNetDialog(tk.Toplevel):
             height,
             key_width,
             value_width)
-        self._populate(net_adap, config_idx)
+        self.changeIdx(idx, net_adaps)
         if xy is None:
             self.after(10, self._centerDialog, master)
         else:
             self.geometry(f'+{xy[0]}+{xy[1]}')
         # Binding events...
         self.protocol('WM_DELETE_WINDOW', self._onClosing)
+    
+    def changeIdx(
+            self,
+            idx: ACIdx,
+            seq: Sequence[NetAdap] | None = None,
+            ) -> None:
+        self._idx = idx
+        if seq is not None:
+            self._adaps = seq
+        self._populate()
     
     def _centerDialog(self, parent: tk.Misc) -> None:
         _, x, y = parent.winfo_geometry().split('+')
@@ -111,14 +124,11 @@ class WmiNetDialog(tk.Toplevel):
                 stack_info=True)
         self.destroy()
     
-    def _populate(
-            self,
-            net_adap: NetAdap,
-            confgi_idx: int | None,
-            ) -> None:
+    def _populate(self) -> None:
         from ntwrk import BaseNetAdap
-        baseNet: BaseNetAdap = net_adap if confgi_idx is None else \
-            net_adap.Configs[confgi_idx]
+        baseNet: BaseNetAdap = self._adaps[self._idx.adapIdx] if \
+            self._idx.cfgIdx is None else self._adaps[
+            self._idx.adapIdx].Configs[self._idx.cfgIdx]
         for attr in baseNet.getAttrs():
             self._sheet.insert_row([attr, getattr(baseNet, attr)])
     
