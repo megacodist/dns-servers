@@ -125,8 +125,8 @@ class WmiNetDialog(tk.Toplevel):
         self.destroy()
     
     def _populate(self) -> None:
-        from ntwrk import BaseNetAdap
-        baseNet: BaseNetAdap = self._adaps[self._idx.adapIdx] if \
+        from ntwrk import AbsNet
+        baseNet: AbsNet = self._adaps[self._idx.adapIdx] if \
             self._idx.cfgIdx is None else self._adaps[
             self._idx.adapIdx].Configs[self._idx.cfgIdx]
         for attr in baseNet.getAttrs():

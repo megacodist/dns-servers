@@ -11,6 +11,7 @@
 """
 
 from __future__ import annotations
+from abc import ABC, abstractmethod
 import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
@@ -61,11 +62,71 @@ class ACIdx:
         self.adapIdx = a_idx
         self.cfgIdx = c_idx
     
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, ACIdx):
+            return NotImplemented
+        if self.adapIdx != value.adapIdx:
+            return False
+        try:
+            return self.cfgIdx == value.cfgIdx
+        except Exception:
+            return False
+    
     def nextIdx(self) -> ACIdx:
         """Returns next index in a `Sequence[NetAdap]`."""
         aIdx = self.adapIdx
         cIdx = 0 if self.cfgIdx is None else self.cfgIdx + 1
         return ACIdx(aIdx, cIdx)
+    
+    def isConfigOf(self, other: ACIdx) -> bool:
+        """Specifies whether this index is a config index of the provided
+        index.
+        """
+        if self.adapIdx != other.adapIdx:
+            return False
+        return (self.cfgIdx is not None) and (other.cfgIdx is None)
+    
+    def isAdapOf(self, other: ACIdx) -> bool:
+        """Specifies whether this index is a adapter index of the provided
+        index.
+        """
+        if self.adapIdx != other.adapIdx:
+            return False
+        return (self.cfgIdx is None) and (other.cfgIdx is not None)
+
+
+class AdapCfgBag:
+    def __init__(self) -> None:
+        self._adaps = dict[int, NetAdap]()
+    
+    def areEquivalent(self, a: ACIdx, b: ACIdx) -> bool:
+        """Specifies whether these two indicies can refer to the same
+        config. For exampe `ACIdx(1, 0)` and `ACIdx(1, None)` if the
+        adapter with index of 1 has only on config, are equilvalently
+        refer to the same config.
+        """
+        if a.adapIdx != b.adapIdx:
+            return False
+        cIndicies = set([a.cfgIdx, b.cfgIdx,])
+        if len(cIndicies) == 1:
+            return True
+        elif cIndicies == set([0, None]):
+            return len(self._adaps[a.adapIdx].Configs) == 1
+        else:
+            return False
+    
+    def indexAdap(self, adap: NetAdap) -> ACIdx:
+        """Get the index of the provided `NetAdap` in the bag. Raises
+        `IndexError` if it has not been found.
+        """
+        try:
+            a = self._adaps[adap.Index]
+        except KeyError:
+            raise IndexError()
+        if a == adap:
+            return ACIdx(adap.Index, None)
+        else:
+            raise IndexError()
 
 
 class ConnStatus(enum.Enum):
@@ -258,12 +319,31 @@ class MAC:
         return self._macAddr == "FF:FF:FF:FF:FF:FF"
 
 
-class BaseNetAdap:
+class AbsNet(ABC):
     def __repr__(self) -> str:
         attrValues = ', '.join(
             f'{attr[1:]}="{getattr(self, attr)}"'
             for attr in self.getAttrs(leading_under=True))
         return f"<{self.__class__.__qualname__} {attrValues}>"
+    
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, AbsNet):
+            return NotImplemented
+        selfDet = set(self.getDeterminant())
+        valueDet = set(value.getDeterminant())
+        if selfDet != valueDet:
+            return False
+        for attr in selfDet:
+            if getattr(self, attr) != getattr(value, attr):
+                return False
+        return True
+    
+    @abstractmethod
+    def getDeterminant(self, leading_under: bool = False) -> tuple[str, ...]:
+        """Gets attributes which determine the nature of the object and
+        should not change while a system runs.
+        """
+        pass
     
     def getAttrs(self, leading_under: bool = False) -> tuple[str, ...]:
         """The attributes of interest of `Win32_NetworkAdapterConfiguration`
@@ -274,9 +354,10 @@ class BaseNetAdap:
             for attr in dir(self)
             if attr.startswith('_') and attr[1].isupper() and not \
                 attr.startswith('__') and not callable(getattr(self, attr))]
-        if not leading_under:
-            attrs = [attr[1:] for attr in attrs]
-        return tuple(attrs)
+        if leading_under:
+            return tuple(attrs)
+        else:
+            return self._removeUnder(attrs)
     
     def update(self, wmi_obj: Any) -> bool:
         """Updates this object with the provided"""
@@ -299,9 +380,15 @@ class BaseNetAdap:
         for attr in selfChanges.keys():
             setattr(self, attr, selfChanges[attr])
         return False
+    
+    def _removeUnder(self, attrs: Iterable[str]) -> tuple[str, ...]:
+        """Removes leading underscore from the specified iterable of
+        attribute names.
+        """
+        return tuple([attr[1:] for attr in attrs])
 
 
-class NetAdap(BaseNetAdap):
+class NetAdap(AbsNet):
     """Instances of this class represent instances of `Win32_NetworkAdapter`
     class on WMI.
     """
@@ -379,14 +466,12 @@ class NetAdap(BaseNetAdap):
     def GUID(self) -> UUID:
         return UUID(self._GUID)
     
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, NetAdap):
-            return NotImplemented
-        return all([
-            self._Description == value._Description,
-            self._DeviceID == value._DeviceID,
-            self._Caption == value._Caption,
-            self._Index == value._Index,])
+    def getDeterminant(self, leading_under: bool = False) -> tuple[str, ...]:
+        det = ['_Description', '_DeviceID', '_Caption', '_Index',]
+        if leading_under:
+            return tuple(det)
+        else:
+            return self._removeUnder(det)
     
     def connectivity(self) -> bool:
         """Specifies whether this network interface has the potential
@@ -407,7 +492,7 @@ class NetAdap(BaseNetAdap):
         return any(config.dhcpAccess() for config in self._configs)
 
 
-class NetAdapConfig(BaseNetAdap):
+class NetAdapConfig(AbsNet):
     """Instances of this class represent instances of
     `Win32_NetworkAdapterConfiguration` class on WMI.
     """
@@ -499,14 +584,12 @@ class NetAdapConfig(BaseNetAdap):
     def MACAddress(self) -> MAC | None:
         return _toMac(self._MACAddress)
     
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, NetAdapConfig):
-            return NotImplemented
-        return all([
-            self._Caption == value._Caption,
-            self._SettingID == value._SettingID,
-            self._Index == value._Index,
-            self._InterfaceIndex == value._InterfaceIndex,])
+    def getDeterminant(self, leading_under: bool = False) -> tuple[str, ...]:
+        det = ['_Caption', '_SettingID', '_InterfaceIndex', '_Index',]
+        if leading_under:
+            return tuple(det)
+        else:
+            return self._removeUnder(det)
     
     def connectivity(self) -> bool:
         """Specifies whether this network interface has the potential
