@@ -95,6 +95,9 @@ msgstr "unnamed"
 msgid "TIMEOUT"
 msgstr "Timeout"
 
+msgid "LICENSE"
+msgstr "License"
+
 msgid "UNKNOWN_CODE"
 msgstr "Unknown HTTP status code"
 
@@ -118,6 +121,9 @@ msgstr "Loading settings..."
 
 msgid "CONFIG_LOGGER"
 msgstr "Configuring logger..."
+
+msgid "LOADING_RES"
+msgstr "Loading resources..."
 
 msgid "DEL_DNS"
 msgstr "Deleting DNS server named '{}'"

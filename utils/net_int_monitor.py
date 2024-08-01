@@ -11,7 +11,7 @@ from typing import Any
 import pythoncom
 import wmi
 
-from ntwrk import NetAdap, NetAdapConfig
+from ntwrk import NetAdap, NetConfig
 
 
 class NetIntMonitor(Thread):
@@ -19,7 +19,7 @@ class NetIntMonitor(Thread):
             self,
             app_win: tk.Tk,
             adap_change: Queue[NetAdap],
-            confgi_change: Queue[NetAdapConfig],
+            confgi_change: Queue[NetConfig],
             ) -> None:
         """Initializes a new instance of this class. `app_win` is the main
         application window that handle the following events:
@@ -82,7 +82,7 @@ class NetIntMonitor(Thread):
             try:
                 event = configChangeWatcher()
                 try:
-                    self._qConfigChange.put(NetAdapConfig(event.ole_object))
+                    self._qConfigChange.put(NetConfig(event.ole_object))
                     self._appTk.event_generate(
                         '<<NetConfigChanged>>',
                         when='tail',)

@@ -9,7 +9,7 @@ from typing import Callable, Literal, TYPE_CHECKING
 from urllib.parse import ParseResult
 
 from db import DnsServer, IDatabase
-from ntwrk import NetAdap
+from ntwrk import AdapCfgBag, NetAdap
 
 
 if TYPE_CHECKING:
@@ -31,11 +31,11 @@ def mergeMsgs(braced: str, embed: str) -> str:
     return braced.format(embed)
 
 
-def readNetAdaps(q: Queue[str] | None) -> list[NetAdap]:
+def readNetAdaps(q: Queue[str] | None) -> AdapCfgBag:
     """Reads all network interfaces. Raises `TypeError` upon any failure."""
     if q:
         q.put(_('READING_INTERFACES'))
-    return NetAdap.enumAllNetInts()
+    return NetAdap.anumWinNetAdaps()
 
 
 def listDnses(

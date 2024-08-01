@@ -19,7 +19,7 @@ from .net_adap_view import NetAdapView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import ACIdx, NetAdap, NetAdapConfig, NetConfigCode
+from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
 from utils.net_int_monitor import NetIntMonitor
 from utils.settings import AppSettings
@@ -53,10 +53,10 @@ class DnsWin(tk.Tk):
         """The application settings object."""
         self._db = db
         """The database object."""
-        self._netAdaps: list[NetAdap]
-        """A list of all network interfaces."""
+        self._acbag: AdapCfgBag
+        """An instance of `AdapCfgBag`, a bag of adapter-config objects."""
         self._qNetAdap = Queue[NetAdap]()
-        self._qNetConfig = Queue[NetAdapConfig]()
+        self._qNetConfig = Queue[NetConfig]()
         self._netIntThrd: NetIntMonitor
         """The thread looking for changes in network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
@@ -71,6 +71,10 @@ class DnsWin(tk.Tk):
         self._HIMG_GTICK: PIL.Image.Image
         self._HIMG_REDX: PIL.Image.Image
         self._HIMG_ARROW: PIL.Image.Image
+        self._HIMG_GINET: PIL.Image.Image
+        self._HIMG_RINET: PIL.Image.Image
+        self._HIMG_GCONN: PIL.Image.Image
+        self._HIMG_RCONN: PIL.Image.Image
         self._IMG_CLOSE: TkImg
         self._IMG_ADD: TkImg
         self._IMG_REMOVE: TkImg
@@ -78,9 +82,15 @@ class DnsWin(tk.Tk):
         self._IMG_GTICK: TkImg
         self._IMG_REDX: TkImg
         self._IMG_ARROW: TkImg
+        self._IMG_GINET: TkImg
+        self._IMG_RINET: TkImg
+        self._IMG_GCONN: TkImg
+        self._IMG_RCONN: TkImg
         # Loading resources...
+        print(_('LOADING_RES'))
         self._loadRes()
         # Initializing the GUI...
+        print(_('CREATING_WIN'))
         self._initGui()
         self.update()
         self._pwin_leftRight.sashpos(0, self._settings.net_int_ips_width)
@@ -132,6 +142,22 @@ class DnsWin(tk.Tk):
         self._HIMG_ARROW = PIL.Image.open(self._RES_DIR / 'arrow.png')
         self._HIMG_ARROW = self._HIMG_ARROW.resize(size=(16, 16,))
         self._IMG_ARROW = PIL.ImageTk.PhotoImage(image=self._HIMG_ARROW)
+        # Loading 'ginet.png...
+        self._HIMG_GINET = PIL.Image.open(self._RES_DIR / 'ginet.png')
+        self._HIMG_GINET = self._HIMG_GINET.resize(size=(16, 16,))
+        self._IMG_GINET = PIL.ImageTk.PhotoImage(image=self._HIMG_GINET)
+        # Loading 'rinet.png...
+        self._HIMG_RINET = PIL.Image.open(self._RES_DIR / 'rinet.png')
+        self._HIMG_RINET = self._HIMG_RINET.resize(size=(16, 16,))
+        self._IMG_RINET = PIL.ImageTk.PhotoImage(image=self._HIMG_RINET)
+        # Loading 'gconn.png...
+        self._HIMG_GCONN = PIL.Image.open(self._RES_DIR / 'gconn.png')
+        self._HIMG_GCONN = self._HIMG_GCONN.resize(size=(16, 16,))
+        self._IMG_GCONN = PIL.ImageTk.PhotoImage(image=self._HIMG_GCONN)
+        # Loading 'rconn.png...
+        self._HIMG_RCONN = PIL.Image.open(self._RES_DIR / 'rconn.png')
+        self._HIMG_RCONN = self._HIMG_RCONN.resize(size=(16, 16,))
+        self._IMG_RCONN = PIL.ImageTk.PhotoImage(image=self._HIMG_RCONN)
 
     def _initGui(self) -> None:
         #
@@ -315,6 +341,10 @@ class DnsWin(tk.Tk):
         self._HIMG_GTICK.close()
         self._HIMG_REDX.close()
         self._HIMG_ARROW.close()
+        self._HIMG_GINET.close()
+        self._HIMG_RINET.close()
+        self._HIMG_GCONN.close()
+        self._HIMG_RCONN.close()
         #
         self._saveGeometry()
         self._settings.net_int_ips_width = self._pwin_leftRight.sashpos(0)
@@ -361,14 +391,14 @@ class DnsWin(tk.Tk):
     def _onNetAdapChanged(self, _: tk.Event) -> None:
         netAdap = self._qNetAdap.get()
         try:
-            adapIdx = self._netAdaps.index(netAdap)
+            adapIdx = self._acbag.index(netAdap)
         except ValueError:
             logging.info(
                 'NetAdap change does not have any peer in the App.',
                 repr(netAdap),
                 stack_info=True,)
             return
-        changed = self._netAdaps[adapIdx].update(netAdap)
+        changed = self._acbag[adapIdx].update(netAdap)
         if changed:
             print('a NetAdap changed')
         else:
@@ -377,20 +407,20 @@ class DnsWin(tk.Tk):
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         netConfig = self._qNetConfig.get()
         try:
-            cfgIdx = ACIdx.fromSeq(netConfig, self._netAdaps)
+            cfgIdx = ACIdx.fromSeq(netConfig, self._acbag)
         except IndexError:
             logging.info(
                 'NetAdapCondif change does not have any peer in the App.',
                 repr(netConfig),
                 stack_info=True,)
             return
-        changed = self._netAdaps[cfgIdx.adapIdx].Configs[
+        changed = self._acbag[cfgIdx.adapIdx].Configs[
             cfgIdx.cfgIdx].update(netConfig) # type: ignore
         if not changed:
-            print('no important change in the NetAdapConfig')
+            print('no important change in the NetConfig')
             return
         #
-        print('a NetAdapConfig changed')
+        print('a NetConfig changed')
             
     
     def _initViews(self) -> None:
@@ -402,10 +432,11 @@ class DnsWin(tk.Tk):
         if idx is None:
             self._ipsvw.clear()
             return
+        adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
         self._lfrm_ips.config(
-            text=self._netAdaps[idx.adapIdx].NetConnectionID)
+            text=adap.NetConnectionID)
         self._ipsvw.populate(
-            self._netAdaps[idx.adapIdx],
+            adap,
             self._mpNameDns.values(),
             idx.cfgIdx)
 
@@ -417,10 +448,10 @@ class DnsWin(tk.Tk):
             finish_cb=self._onNetAdapsRead,
             widgets=(self._adapsvw,))
     
-    def _onNetAdapsRead(self, fut: Future[list[NetAdap]]) -> None:
+    def _onNetAdapsRead(self, fut: Future[AdapCfgBag]) -> None:
         try:
-            self._netAdaps = fut.result()
-            self._adapsvw.populate(self._netAdaps)
+            self._acbag = fut.result()
+            self._adapsvw.populate(self._acbag)
         except CancelledError:
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_INTERFACES')),
@@ -478,7 +509,7 @@ class DnsWin(tk.Tk):
         from widgets.net_int_dialog import WmiNetDialog
         netIntDlg = WmiNetDialog(
             self,
-            self._netAdaps,
+            self._acbag,
             idx,
             xy=(self._settings.nid_x, self._settings.nid_y,),
             width=self._settings.nid_width,
@@ -583,7 +614,7 @@ class DnsWin(tk.Tk):
                 'Select IPs individually or entire rows.',
                 type_=MessageType.ERROR)
             return
-        code = self._netAdaps[netIntIdx].setDnsSearchOrder(ips)
+        code = self._acbag[netIntIdx].setDnsSearchOrder(ips)
         if code != NetConfigCode.SUCCESSFUL:
             self._msgvw.AddMessage(code.name)
     
@@ -596,7 +627,7 @@ class DnsWin(tk.Tk):
         from widgets.url_dialog import UrlDialog
         dnsDialog = UrlDialog(
             self,
-            self._netAdaps[idx].NetConnectionID,
+            self._acbag[idx].NetConnectionID,
             self._mpNameDns,
             self._IMG_GTICK,
             self._IMG_REDX,

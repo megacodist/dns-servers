@@ -10,7 +10,7 @@ from tkinter import ttk
 from typing import Callable, Iterable, TYPE_CHECKING, Mapping, NamedTuple
 
 from db import DnsServer, IPRole
-from ntwrk import NetAdap, NetAdapConfig
+from ntwrk import NetAdap, NetConfig
 from utils.keyboard import Modifiers
 
 
@@ -266,7 +266,7 @@ class IpsView(ttk.Frame):
     
     def _populateTable(
             self,
-            net_config: NetAdapConfig,
+            net_config: NetConfig,
             dnses: Iterable[DnsServer],
             ) -> None:
         """Populates the IP table in IPs mode."""

@@ -31,6 +31,7 @@ class NetAdapView(tk.Frame):
         self._connColor = 'green'
         self._disconnColor = '#ca482e'
         self._mpIidIdx = dict[str, ACIdx]()
+        self._mpIdxIid = dict[ACIdx, str]()
         self._NAME_COL_IDX = 1
         self._initGui(name_col_width)
         # Bindings...
@@ -136,6 +137,10 @@ class NetAdapView(tk.Frame):
                 logging.error(
                     'more than one item in the Dnsview is selected',
                     stack_info=True,)
+    
+    def _acidxToStr(self, idx: ACIdx) -> str:
+        return str(idx.adapIdx) if idx.cfgIdx is None else \
+            f'{idx.adapIdx}-{idx.cfgIdx}'
 
     def _iidToAcidx(self, iid: str) -> ACIdx | None:
         parts = iid.split('-')
@@ -149,4 +154,6 @@ class NetAdapView(tk.Frame):
                     'invalid number of dash-separated parts of iid',
                     stack_info=True,)
     
-    def update(self, base_net:)
+    def addAdap(self, adap: NetAdap, adap_idx: ACIdx) -> None:
+        iid = self._trvw.insert(
+            parent='')

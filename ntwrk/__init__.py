@@ -17,18 +17,21 @@ from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from os import PathLike
 import re
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 from uuid import UUID
 
 
 class ACIdx:
-    """This class specifies the index of a `NetAdapConfig` in a sequence
-    of `NetAdap`.
+    """This class specifies the index of a `NetAdap` or `NetConfig` object
+    in a `AdapCfgBag` container. The `adapIdx` must always be an integer
+    but the `cfgIdx` can be `int` or `None`:
+    * `cfgIdx is None`: the index is called to be an adapter index
+    * `cfgIdx: int`: the index is called to be a config index
     """
     @classmethod
     def fromSeq(
             cls,
-            cfg: NetAdapConfig,
+            cfg: NetConfig,
             seq: Sequence[NetAdap],
             start: ACIdx | None = None,
             ) -> ACIdx:
@@ -72,6 +75,10 @@ class ACIdx:
         except Exception:
             return False
     
+    def __repr__(self) -> str:
+        return (f'<{self.__class__.__qualname__}(adapIdx={self.adapIdx}, '
+            f'cfgIdx={self.cfgIdx})>')
+    
     def nextIdx(self) -> ACIdx:
         """Returns next index in a `Sequence[NetAdap]`."""
         aIdx = self.adapIdx
@@ -93,11 +100,30 @@ class ACIdx:
         if self.adapIdx != other.adapIdx:
             return False
         return (self.cfgIdx is None) and (other.cfgIdx is not None)
+    
+    def getAdap(self) -> ACIdx:
+        """Gets the adapter version of this index. If it is already an
+        adapter index, it will returned unchanged.
+        """
+        return ACIdx(self.adapIdx, None)
 
 
 class AdapCfgBag:
     def __init__(self) -> None:
         self._adaps = dict[int, NetAdap]()
+    
+    def __getitem__(self, idx: ACIdx) -> NetAdap | NetConfig:
+        try:
+            adap = self._adaps[idx.adapIdx]
+        except KeyError:
+            raise IndexError(f'no network adapter with Index={idx.adapIdx}')
+        if idx.cfgIdx is None:
+            return adap
+        try:
+            return adap._configs[idx.cfgIdx]
+        except KeyError:
+            raise IndexError(
+                f'no network adapter config with Index={idx.cfgIdx}')
     
     def areEquivalent(self, a: ACIdx, b: ACIdx) -> bool:
         """Specifies whether these two indicies can refer to the same
@@ -127,6 +153,34 @@ class AdapCfgBag:
             return ACIdx(adap.Index, None)
         else:
             raise IndexError()
+    
+    def iterAdaps(self) -> Iterator[tuple[ACIdx, NetAdap]]:
+        """Returns an iterator to iterate through all network adapters
+        alongside their `ACIdx`.
+        """
+        return (
+            (ACIdx(adap.Index, None,), adap)
+            for adap in self._adaps.values())
+    
+    def iterConfigs(
+            self,
+            adap_idx: ACIdx,
+            ) -> Iterator[tuple[ACIdx, NetConfig]]:
+        """Returns an iterator to iterate through all network adapter
+        configurations alongside their `ACIdx` for the specified network
+        adapter. Raises `IndexError` if the provided index is not an
+        adapter index or it does not exist in the bag.
+        """
+        if adap_idx.cfgIdx is not None:
+            raise IndexError(f'{adap_idx} is not an adapter index')
+        try:
+            adap = self._adaps[adap_idx.adapIdx]
+        except KeyError:
+            raise IndexError(
+                f'the adapter index does not exist in this bag: {adap_idx}')
+        return (
+            (ACIdx(adap_idx.adapIdx, i), cfg,)
+            for i, cfg in adap._configs.items())
 
 
 class ConnStatus(enum.Enum):
@@ -394,7 +448,7 @@ class NetAdap(AbsNet):
     """
 
     @ classmethod
-    def enumAllNetInts(cls) -> list[NetAdap]:
+    def anumWinNetAdaps(cls) -> AdapCfgBag:
         """Enumerates all network interfaces on this Windows platform."""
         return _enumNetAdaps()
 
@@ -424,11 +478,11 @@ class NetAdap(AbsNet):
         except AttributeError as err:
             raise TypeError(err.args)
         else:
-            self._configs = list[NetAdapConfig]()
+            self._configs = dict[int, NetConfig]()
     
     @property
-    def Configs(self) -> tuple[NetAdapConfig, ...]:
-        return tuple(self._configs)
+    def Configs(self) -> tuple[NetConfig, ...]:
+        return tuple(self._configs.values())
     
     @property
     def DeviceID(self) -> str:
@@ -477,28 +531,28 @@ class NetAdap(AbsNet):
         """Specifies whether this network interface has the potential
         interner connectivity.
         """
-        return any(config.connectivity() for config in self._configs)
+        return any(config.connectivity() for config in self._configs.values())
     
     def dnsProvided(self) -> bool:
         """Specifies whether this network interface is provided with DNS
         servers or not.
         """
-        return any(config.dnsProvided() for config in self._configs)
+        return any(config.dnsProvided() for config in self._configs.values())
     
     def dhcpAccess(self) -> bool:
         """Specifies whether this network interface has access to DHCP
         server.
         """
-        return any(config.dhcpAccess() for config in self._configs)
+        return any(config.dhcpAccess() for config in self._configs.values())
 
 
-class NetAdapConfig(AbsNet):
+class NetConfig(AbsNet):
     """Instances of this class represent instances of
     `Win32_NetworkAdapterConfiguration` class on WMI.
     """
 
     def __init__(self, obj: Any) -> None:
-        """Initializes an instance of `NetAdapConfig` class with an object
+        """Initializes an instance of `NetConfig` class with an object
         that provide necessary attributes. It raises `TypeError` if `obj` 
         does not have enough attributes
         """
@@ -628,7 +682,7 @@ class NetAdapConfig(AbsNet):
         return NetConfigCode(code[0])
 
 
-def _enumNetAdaps() -> list[NetAdap]:
+def _enumNetAdaps() -> AdapCfgBag:
     import pythoncom
     import win32com.client
     #
@@ -670,27 +724,29 @@ def _enumNetAdaps() -> list[NetAdap]:
     if badWmiAdaps:
         logging.error('some COM objects cannot be converted into "NetAdap"')
     #
-    missCfgs = list[NetAdapConfig]()
+    missCfgs = list[NetConfig]()
     badWmiCfgs = False
     for cfg in wmiConfigs:
         try:
-            cfg = NetAdapConfig(cfg)
+            cfg = NetConfig(cfg)
         except  TypeError:
             badWmiCfgs = True
             continue
         try:
-            mpAdapters[cfg._Caption]._configs.append(cfg)
+            mpAdapters[cfg._Caption]._configs[cfg.Index] = cfg
         except KeyError:
             missCfgs.append(cfg)
     if badWmiCfgs:
         logging.error(
-            'some COM objects cannot be converted into "NetAdapConfig"')
+            'some COM objects cannot be converted into "NetConfig"')
     #
     if missAdaps and missCfgs:
         print("Merging should've been continued!!!")
     #
     pythoncom.CoUninitialize()
-    return list(mpAdapters.values())
+    acBag = AdapCfgBag()
+    acBag._adaps = {adap.Index:adap for adap in mpAdapters.values()}
+    return acBag
 
 
 def _toIpTuple(
