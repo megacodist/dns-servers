@@ -17,8 +17,12 @@ from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from os import PathLike
 import re
-from typing import Any, Iterable, Iterator, Sequence
+from typing import Any, Iterable, Iterator
 from uuid import UUID
+
+
+class ACIdxError(Exception):
+    pass
 
 
 class ACIdx:
@@ -28,38 +32,6 @@ class ACIdx:
     * `cfgIdx is None`: the index is called to be an adapter index
     * `cfgIdx: int`: the index is called to be a config index
     """
-    @classmethod
-    def fromSeq(
-            cls,
-            cfg: NetConfig,
-            seq: Sequence[NetAdap],
-            start: ACIdx | None = None,
-            ) -> ACIdx:
-        """Searches for a network adapter configuration in a sequence of
-        network adapters. It is possible to specify a starting point for
-        search. It raises `IndexError` if it does not find it.
-        """
-        if start is None:
-            aIdx, cIdx = 0, 0
-        else:
-            aIdx = start.adapIdx
-            cIdx = 0 if start.cfgIdx is None else start.cfgIdx + 1
-        #
-        while True:
-            try:
-                adap = seq[aIdx]
-            except IndexError as err:
-                raise err
-            else:
-                while True:
-                    try:
-                        if cfg == adap.Configs[cIdx]:
-                            return ACIdx(aIdx, cIdx)
-                    except IndexError:
-                        break
-                    else:
-                        cIdx += 1
-                aIdx += 1
 
     def __init__(self, a_idx: int, c_idx: int | None,) -> None:
         self.adapIdx = a_idx
@@ -74,6 +46,9 @@ class ACIdx:
             return self.cfgIdx == value.cfgIdx
         except Exception:
             return False
+    
+    def __hash__(self) -> int:
+        return hash(self.toTuple())
     
     def __repr__(self) -> str:
         return (f'<{self.__class__.__qualname__}(adapIdx={self.adapIdx}, '
@@ -106,6 +81,9 @@ class ACIdx:
         adapter index, it will returned unchanged.
         """
         return ACIdx(self.adapIdx, None)
+    
+    def toTuple(self) -> tuple[int, int | None]:
+        return (self.adapIdx, self.cfgIdx,)
 
 
 class AdapCfgBag:
@@ -143,16 +121,47 @@ class AdapCfgBag:
     
     def indexAdap(self, adap: NetAdap) -> ACIdx:
         """Get the index of the provided `NetAdap` in the bag. Raises
-        `IndexError` if it has not been found.
+        `ACIdxError` if it has not been found.
         """
         try:
             a = self._adaps[adap.Index]
         except KeyError:
-            raise IndexError()
+            raise ACIdxError('')
         if a == adap:
             return ACIdx(adap.Index, None)
         else:
-            raise IndexError()
+            raise ACIdxError('')
+    
+    def indexConfig(
+            self,
+            config: NetConfig,
+            start: ACIdx | None = None,
+            ) -> ACIdx:
+        """Searches for a network adapter configuration in a sequence of
+        network adapters. It is possible to specify a starting point for
+        search. It raises `ACIdxError` if it does not find it.
+        """
+        if start is None:
+            aIdx, cIdx = 0, 0
+        else:
+            aIdx = start.adapIdx
+            cIdx = 0 if start.cfgIdx is None else start.cfgIdx + 1
+        #
+        while True:
+            try:
+                adap = self._adaps[aIdx]
+            except KeyError:
+                raise ACIdxError('config does not exist')
+            else:
+                while True:
+                    try:
+                        if config == adap.Configs[cIdx]:
+                            return ACIdx(aIdx, cIdx)
+                    except KeyError:
+                        break
+                    else:
+                        cIdx += 1
+                aIdx += 1
     
     def iterAdaps(self) -> Iterator[tuple[ACIdx, NetAdap]]:
         """Returns an iterator to iterate through all network adapters
@@ -528,8 +537,8 @@ class NetAdap(AbsNet):
             return self._removeUnder(det)
     
     def connectivity(self) -> bool:
-        """Specifies whether this network interface has the potential
-        interner connectivity.
+        """Specifies whether this network adapter has the potential
+        internet connectivity.
         """
         return any(config.connectivity() for config in self._configs.values())
     

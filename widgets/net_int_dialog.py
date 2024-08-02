@@ -9,7 +9,7 @@ from typing import Callable, TYPE_CHECKING, NamedTuple, Sequence
 
 from tksheet import Sheet
 
-from ntwrk import ACIdx, NetAdap
+from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig
 
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class WmiNetDialog(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            net_adaps: Sequence[NetAdap],
+            net_bag: AdapCfgBag,
             idx: ACIdx,
             *,
             xy: tuple[int, int] | None = None,
@@ -39,12 +39,12 @@ class WmiNetDialog(tk.Toplevel):
             value_width: int = 180,
             ) -> None:
         super().__init__(master)
-        self.title(net_adaps[idx.adapIdx].NetConnectionID)
         self.resizable(True, True)
         self.geometry(f'{width}x{height}')
         self.grab_set()
         #
-        self._adaps: Sequence[NetAdap]
+        self._bag = net_bag
+        self.title(self._getTitle(idx))
         self._idx: ACIdx
         #
         self._sheet = Sheet(self, headers=[_('KEY'), _('VALUE'),])
@@ -73,7 +73,7 @@ class WmiNetDialog(tk.Toplevel):
             height,
             key_width,
             value_width)
-        self.changeIdx(idx, net_adaps)
+        self.changeIdx(idx, net_bag)
         if xy is None:
             self.after(10, self._centerDialog, master)
         else:
@@ -84,12 +84,23 @@ class WmiNetDialog(tk.Toplevel):
     def changeIdx(
             self,
             idx: ACIdx,
-            seq: Sequence[NetAdap] | None = None,
+            bag: AdapCfgBag | None = None,
             ) -> None:
         self._idx = idx
-        if seq is not None:
-            self._adaps = seq
+        if bag is not None:
+            self._bag = bag
         self._populate()
+    
+    def _getTitle(self, idx: ACIdx) -> str:
+        item = self._bag[idx]
+        if isinstance(item, NetAdap):
+            return item.NetConnectionID
+        elif isinstance(item, NetConfig):
+            return str(item.Index)
+        else:
+            logging.error('expected NetAdap or NetConfig, got '
+                f'{item.__class__.__qualname__}')
+            return item.__class__.__qualname__
     
     def _centerDialog(self, parent: tk.Misc) -> None:
         _, x, y = parent.winfo_geometry().split('+')
@@ -126,9 +137,7 @@ class WmiNetDialog(tk.Toplevel):
     
     def _populate(self) -> None:
         from ntwrk import AbsNet
-        baseNet: AbsNet = self._adaps[self._idx.adapIdx] if \
-            self._idx.cfgIdx is None else self._adaps[
-            self._idx.adapIdx].Configs[self._idx.cfgIdx]
+        baseNet: AbsNet = self._bag[self._idx]
         for attr in baseNet.getAttrs():
             self._sheet.insert_row([attr, getattr(baseNet, attr)])
     

@@ -19,7 +19,7 @@ from .net_adap_view import NetAdapView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
+from ntwrk import ACIdx, ACIdxError, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
 from utils.net_int_monitor import NetIntMonitor
 from utils.settings import AppSettings
@@ -73,8 +73,8 @@ class DnsWin(tk.Tk):
         self._HIMG_ARROW: PIL.Image.Image
         self._HIMG_GINET: PIL.Image.Image
         self._HIMG_RINET: PIL.Image.Image
-        self._HIMG_GCONN: PIL.Image.Image
-        self._HIMG_RCONN: PIL.Image.Image
+        self._HIMG_GNTWRK: PIL.Image.Image
+        self._HIMG_RNTWRK: PIL.Image.Image
         self._IMG_CLOSE: TkImg
         self._IMG_ADD: TkImg
         self._IMG_REMOVE: TkImg
@@ -84,8 +84,8 @@ class DnsWin(tk.Tk):
         self._IMG_ARROW: TkImg
         self._IMG_GINET: TkImg
         self._IMG_RINET: TkImg
-        self._IMG_GCONN: TkImg
-        self._IMG_RCONN: TkImg
+        self._IMG_GNTWRK: TkImg
+        self._IMG_RNTWRK: TkImg
         # Loading resources...
         print(_('LOADING_RES'))
         self._loadRes()
@@ -151,13 +151,13 @@ class DnsWin(tk.Tk):
         self._HIMG_RINET = self._HIMG_RINET.resize(size=(16, 16,))
         self._IMG_RINET = PIL.ImageTk.PhotoImage(image=self._HIMG_RINET)
         # Loading 'gconn.png...
-        self._HIMG_GCONN = PIL.Image.open(self._RES_DIR / 'gconn.png')
-        self._HIMG_GCONN = self._HIMG_GCONN.resize(size=(16, 16,))
-        self._IMG_GCONN = PIL.ImageTk.PhotoImage(image=self._HIMG_GCONN)
+        self._HIMG_GNTWRK = PIL.Image.open(self._RES_DIR / 'gconn.png')
+        self._HIMG_GNTWRK = self._HIMG_GNTWRK.resize(size=(16, 16,))
+        self._IMG_GNTWRK = PIL.ImageTk.PhotoImage(image=self._HIMG_GNTWRK)
         # Loading 'rconn.png...
-        self._HIMG_RCONN = PIL.Image.open(self._RES_DIR / 'rconn.png')
-        self._HIMG_RCONN = self._HIMG_RCONN.resize(size=(16, 16,))
-        self._IMG_RCONN = PIL.ImageTk.PhotoImage(image=self._HIMG_RCONN)
+        self._HIMG_RNTWRK = PIL.Image.open(self._RES_DIR / 'rconn.png')
+        self._HIMG_RNTWRK = self._HIMG_RNTWRK.resize(size=(16, 16,))
+        self._IMG_RNTWRK = PIL.ImageTk.PhotoImage(image=self._HIMG_RNTWRK)
 
     def _initGui(self) -> None:
         #
@@ -188,7 +188,11 @@ class DnsWin(tk.Tk):
         self._adapsvw = NetAdapView(
             self._lfrm_netAdaps,
             self._readDnsInfo,
-            self._showNetAdapInfo)
+            self._showNetAdapInfo,
+            gntwrk_img=self._IMG_GNTWRK,
+            rntwrk_img=self._IMG_RNTWRK,
+            ginet_img=self._IMG_GINET,
+            rinet_img=self._IMG_RINET,)
         self._adapsvw.pack(fill=tk.BOTH, expand=1, padx=4, pady=4)
         #
         self._lfrm_ips = ttk.LabelFrame(self._pwin_netIntIps)
@@ -343,8 +347,8 @@ class DnsWin(tk.Tk):
         self._HIMG_ARROW.close()
         self._HIMG_GINET.close()
         self._HIMG_RINET.close()
-        self._HIMG_GCONN.close()
-        self._HIMG_RCONN.close()
+        self._HIMG_GNTWRK.close()
+        self._HIMG_RNTWRK.close()
         #
         self._saveGeometry()
         self._settings.net_int_ips_width = self._pwin_leftRight.sashpos(0)
@@ -389,38 +393,42 @@ class DnsWin(tk.Tk):
                 'Cannot get the geometry of the window.', stack_info=True)
     
     def _onNetAdapChanged(self, _: tk.Event) -> None:
-        netAdap = self._qNetAdap.get()
+        newAdap = self._qNetAdap.get()
         try:
-            adapIdx = self._acbag.index(netAdap)
-        except ValueError:
+            adapIdx = self._acbag.indexAdap(newAdap)
+        except ACIdxError:
             logging.info(
                 'NetAdap change does not have any peer in the App.',
-                repr(netAdap),
+                repr(newAdap),
                 stack_info=True,)
             return
-        changed = self._acbag[adapIdx].update(netAdap)
-        if changed:
-            print('a NetAdap changed')
-        else:
+        curAdap: NetAdap = self._acbag[adapIdx] # type: ignore
+        changed = curAdap.update(newAdap)
+        if not changed:
             print('no important change in the NetAdap')
+            return
+        #
+        print('a NetAdap changed')
+        self._adapsvw.changeAdap(newAdap, adapIdx)
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
-        netConfig = self._qNetConfig.get()
+        newConfig = self._qNetConfig.get()
         try:
-            cfgIdx = ACIdx.fromSeq(netConfig, self._acbag)
-        except IndexError:
+            configIdx = self._acbag.indexConfig(newConfig)
+        except ACIdxError:
             logging.info(
-                'NetAdapCondif change does not have any peer in the App.',
-                repr(netConfig),
+                'NetConfig change does not have any peer in the App.',
+                repr(newConfig),
                 stack_info=True,)
             return
-        changed = self._acbag[cfgIdx.adapIdx].Configs[
-            cfgIdx.cfgIdx].update(netConfig) # type: ignore
+        curConfig: NetConfig = self._acbag[configIdx] # type: ignore
+        changed = curConfig.update(newConfig)
         if not changed:
             print('no important change in the NetConfig')
             return
         #
         print('a NetConfig changed')
+        self._adapsvw.changeConfig(newConfig, configIdx)
             
     
     def _initViews(self) -> None:
