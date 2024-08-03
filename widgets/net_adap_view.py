@@ -6,7 +6,7 @@ import enum
 import logging
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, Iterable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING
 
 from ntwrk import ACIdx, AdapCfgBag, NetAdap, ConnStatus, NetConfig
 from utils.types import TkImg
@@ -203,7 +203,7 @@ class NetAdapView(tk.Frame):
     
     def changeAdap(self, adap: NetAdap, adap_idx: ACIdx) -> None:
         iid = self._acidxToIid(adap_idx)
-        self._trvw.item(iid, image=self._getImg(adap))
+        self._trvw.item(iid, image=self._getImg(adap)) # type: ignore
         self._trvw.item(iid, values=(adap.NetConnectionID,))
 
     def changeConfig(self, config: NetConfig, config_idx: ACIdx) -> None:

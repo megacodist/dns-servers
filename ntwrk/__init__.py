@@ -21,10 +21,6 @@ from typing import Any, Iterable, Iterator
 from uuid import UUID
 
 
-class ACIdxError(Exception):
-    pass
-
-
 class ACIdx:
     """This class specifies the index of a `NetAdap` or `NetConfig` object
     in a `AdapCfgBag` container. The `adapIdx` must always be an integer
@@ -126,42 +122,24 @@ class AdapCfgBag:
         try:
             a = self._adaps[adap.Index]
         except KeyError:
-            raise ACIdxError('')
+            raise IndexError('')
         if a == adap:
             return ACIdx(adap.Index, None)
         else:
-            raise ACIdxError('')
+            raise IndexError('')
     
     def indexConfig(
             self,
             config: NetConfig,
-            start: ACIdx | None = None,
             ) -> ACIdx:
-        """Searches for a network adapter configuration in a sequence of
-        network adapters. It is possible to specify a starting point for
-        search. It raises `ACIdxError` if it does not find it.
+        """Searches for a network adapter configuration in a bag of
+        network adapters and configurations. It raises `IndexError` if
+        it does not find it.
         """
-        if start is None:
-            aIdx, cIdx = 0, 0
-        else:
-            aIdx = start.adapIdx
-            cIdx = 0 if start.cfgIdx is None else start.cfgIdx + 1
-        #
-        while True:
-            try:
-                adap = self._adaps[aIdx]
-            except KeyError:
-                raise ACIdxError('config does not exist')
-            else:
-                while True:
-                    try:
-                        if config == adap.Configs[cIdx]:
-                            return ACIdx(aIdx, cIdx)
-                    except KeyError:
-                        break
-                    else:
-                        cIdx += 1
-                aIdx += 1
+        for adap in self._adaps.values():
+            if config.Index in adap._configs:
+                return ACIdx(adap.Index, config.Index)
+        raise IndexError('config does not exist')
     
     def iterAdaps(self) -> Iterator[tuple[ACIdx, NetAdap]]:
         """Returns an iterator to iterate through all network adapters
@@ -384,10 +362,15 @@ class MAC:
 
 class AbsNet(ABC):
     def __repr__(self) -> str:
-        attrValues = ', '.join(
-            f'{attr[1:]}="{getattr(self, attr)}"'
-            for attr in self.getAttrs(leading_under=True))
-        return f"<{self.__class__.__qualname__} {attrValues}>"
+        attrValues = list[str]()
+        for attr in self.getDeterminant(leading_under=True):
+            value = getattr(self, attr)
+            if isinstance(value, str):
+                attrValues.append(f'{attr[1:]}="{getattr(self, attr)}"')
+            else:
+                attrValues.append(f'{attr[1:]}={getattr(self, attr)}')
+        msg = ', '.join(attrValues)
+        return f"<{self.__class__.__qualname__} {msg}>"
     
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, AbsNet):
@@ -530,7 +513,7 @@ class NetAdap(AbsNet):
         return UUID(self._GUID)
     
     def getDeterminant(self, leading_under: bool = False) -> tuple[str, ...]:
-        det = ['_Description', '_DeviceID', '_Caption', '_Index',]
+        det = ['_Index', '_DeviceID', '_Description', '_Caption',]
         if leading_under:
             return tuple(det)
         else:
@@ -648,7 +631,7 @@ class NetConfig(AbsNet):
         return _toMac(self._MACAddress)
     
     def getDeterminant(self, leading_under: bool = False) -> tuple[str, ...]:
-        det = ['_Caption', '_SettingID', '_InterfaceIndex', '_Index',]
+        det = ['_Index', '_InterfaceIndex', '_Caption', '_SettingID',]
         if leading_under:
             return tuple(det)
         else:

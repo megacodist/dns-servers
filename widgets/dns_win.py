@@ -19,7 +19,7 @@ from .net_adap_view import NetAdapView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
-from ntwrk import ACIdx, ACIdxError, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
+from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
 from utils.net_int_monitor import NetIntMonitor
 from utils.settings import AppSettings
@@ -396,38 +396,37 @@ class DnsWin(tk.Tk):
         newAdap = self._qNetAdap.get()
         try:
             adapIdx = self._acbag.indexAdap(newAdap)
-        except ACIdxError:
+        except IndexError:
             logging.info(
-                'NetAdap change does not have any peer in the App.',
-                repr(newAdap),
-                stack_info=True,)
+                ('change in the ollowing NetAdap that did not loaded into'
+                ' the app.\n%s'),
+                newAdap,)
             return
         curAdap: NetAdap = self._acbag[adapIdx] # type: ignore
         changed = curAdap.update(newAdap)
         if not changed:
-            print('no important change in the NetAdap')
+            print(f'no important change in {repr(newAdap)}')
             return
         #
-        print('a NetAdap changed')
+        print(f'{newAdap} changed')
         self._adapsvw.changeAdap(newAdap, adapIdx)
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         newConfig = self._qNetConfig.get()
         try:
             configIdx = self._acbag.indexConfig(newConfig)
-        except ACIdxError:
+        except IndexError:
             logging.info(
-                'NetConfig change does not have any peer in the App.',
-                repr(newConfig),
-                stack_info=True,)
+                'NetConfig change does not have any peer in the App.\n%s',
+                newConfig,)
             return
         curConfig: NetConfig = self._acbag[configIdx] # type: ignore
         changed = curConfig.update(newConfig)
         if not changed:
-            print('no important change in the NetConfig')
+            print(f'no important change in {repr(newConfig)}')
             return
         #
-        print('a NetConfig changed')
+        print(f'{newConfig} changed')
         self._adapsvw.changeConfig(newConfig, configIdx)
             
     
