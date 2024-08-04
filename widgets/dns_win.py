@@ -21,7 +21,7 @@ from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
 from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
-from utils.net_int_monitor import NetIntMonitor
+from utils.net_int_monitor import NetItemMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
 
@@ -55,9 +55,13 @@ class DnsWin(tk.Tk):
         """The database object."""
         self._acbag: AdapCfgBag
         """An instance of `AdapCfgBag`, a bag of adapter-config objects."""
-        self._qNetAdap = Queue[NetAdap]()
-        self._qNetConfig = Queue[NetConfig]()
-        self._netIntThrd: NetIntMonitor
+        self._qAdapChange = Queue[NetAdap]()
+        self._qAdapCreation = Queue[NetAdap]()
+        self._qAdapDeletion = Queue[NetAdap]()
+        self._qConfigChange = Queue[NetConfig]()
+        self._qConfigCreation = Queue[NetConfig]()
+        self._qConfigDeletion = Queue[NetConfig]()
+        self._netItemThrd: NetItemMonitor
         """The thread looking for changes in network interfaces."""
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
@@ -105,7 +109,11 @@ class DnsWin(tk.Tk):
         # Bindings & events...
         self.protocol('WM_DELETE_WINDOW', self._onWinClosing)
         self.bind('<<NetAdapChanged>>', self._onNetAdapChanged)
+        self.bind('<<NetAdapCreated>>', self._onNetAdapCreated)
+        self.bind('<<NetAdapDeleted>>', self._onNetAdapDeleted)
         self.bind('<<NetConfigChanged>>', self._onNetConfigChanged)
+        self.bind('<<NetConfigCreated>>', self._onNetConfigCreated)
+        self.bind('<<NetConfigDeleted>>', self._onNetConfigDeleted)
         # Initializes views...
         self.after(100, self._initViews)
     
@@ -363,11 +371,13 @@ class DnsWin(tk.Tk):
         self._settings.secon_6_col_width = colsWidth[4]
         # Cleaning up...
         self._asyncMngr.close()
-        # Destroying the window...
         try:
-            self._netIntThrd.cancel()
+            self._netItemThrd.cancel()
         except AttributeError:
             pass
+        else:
+            self._netItemThrd.join()
+        # Destroying the window...
         self.destroy()
     
     def _saveGeometry(self) -> None:
@@ -393,12 +403,12 @@ class DnsWin(tk.Tk):
                 'Cannot get the geometry of the window.', stack_info=True)
     
     def _onNetAdapChanged(self, _: tk.Event) -> None:
-        newAdap = self._qNetAdap.get()
+        newAdap = self._qAdapChange.get()
         try:
             adapIdx = self._acbag.indexAdap(newAdap)
         except IndexError:
             logging.info(
-                ('change in the ollowing NetAdap that did not loaded into'
+                ('change in the following NetAdap that did not loaded into'
                 ' the app.\n%s'),
                 newAdap,)
             return
@@ -411,8 +421,27 @@ class DnsWin(tk.Tk):
         print(f'{newAdap} changed')
         self._adapsvw.changeAdap(newAdap, adapIdx)
     
+    def _onNetAdapCreated(self, _: tk.Event) -> None:
+        pass
+
+    def _onNetAdapDeleted(self, _: tk.Event) -> None:
+        newAdap = self._qAdapDeletion.get()
+        try:
+            adapIdx = self._acbag.indexAdap(newAdap)
+        except IndexError:
+            logging.info(
+                ('deletion of the following NetAdap that did not loaded into'
+                ' the app.\n%s'),
+                newAdap,)
+            return
+        #
+        vwIdx = self._adapsvw.getSelectedIdx()
+        if vwIdx is not None and vwIdx == adapIdx:
+            self._ipsvw.clear()
+        self._adapsvw.delItem(adapIdx)
+    
     def _onNetConfigChanged(self, _: tk.Event) -> None:
-        newConfig = self._qNetConfig.get()
+        newConfig = self._qConfigChange.get()
         try:
             configIdx = self._acbag.indexConfig(newConfig)
         except IndexError:
@@ -428,7 +457,15 @@ class DnsWin(tk.Tk):
         #
         print(f'{newConfig} changed')
         self._adapsvw.changeConfig(newConfig, configIdx)
-            
+        adapIdx = configIdx.getAdap()
+        adap: NetAdap = self._acbag[adapIdx] # type: ignore
+        self._adapsvw.changeAdap(adap, adapIdx)
+    
+    def _onNetConfigCreated(self, _: tk.Event) -> None:
+        pass
+
+    def _onNetConfigDeleted(self, _: tk.Event) -> None:
+        pass
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
@@ -437,6 +474,7 @@ class DnsWin(tk.Tk):
     
     def _readDnsInfo(self, idx: ACIdx | None) -> None:
         if idx is None:
+            self._lfrm_ips.config(text='')
             self._ipsvw.clear()
             return
         adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
@@ -466,15 +504,18 @@ class DnsWin(tk.Tk):
         else:
             # Running WMI monitoring thread...
             try:
-                self._netIntThrd
+                self._netItemThrd
                 return
             except AttributeError:
-                pass
-            self._netIntThrd = NetIntMonitor(
-                self,
-                self._qNetAdap,
-                self._qNetConfig,)
-            self._netIntThrd.start()
+                self._netItemThrd = NetItemMonitor(
+                    self,
+                    self._qAdapChange,
+                    self._qAdapCreation,
+                    self._qAdapDeletion,
+                    self._qConfigChange,
+                    self._qConfigCreation,
+                    self._qConfigDeletion,)
+                self._netItemThrd.start()
     
     def _readDnses(self) -> None:
         from utils.funcs import listDnses

@@ -14,16 +14,16 @@ import wmi
 from ntwrk import NetAdap, NetConfig
 
 
-class NetIntMonitor(Thread):
+class NetItemMonitor(Thread):
     def __init__(
             self,
             app_win: tk.Tk,
             adap_change: Queue[NetAdap],
             adap_creation: Queue[NetAdap],
             adap_deletion: Queue[NetAdap],
-            confgi_change: Queue[NetConfig],
-            config_creation: Queue[NetAdap],
-            config_deletion: Queue[NetAdap],
+            config_change: Queue[NetConfig],
+            config_creation: Queue[NetConfig],
+            config_deletion: Queue[NetConfig],
             ) -> None:
         """Initializes a new instance of this class. `app_win` is the main
         application window that handle the following events:
@@ -41,7 +41,7 @@ class NetIntMonitor(Thread):
         self._qAdapChange = adap_change
         self._qAdapCreation = adap_creation
         self._qAdapDeletion = adap_deletion
-        self._qConfigChange = confgi_change
+        self._qConfigChange = config_change
         self._qConfigCreation = config_creation
         self._qConfigDeletion = config_deletion
         self._cancel: Event | None = Event()
@@ -158,6 +158,20 @@ class NetIntMonitor(Thread):
                         when='tail',)
                 except TypeError:
                     logging.debug('failed to catch NetConfig creation')
+            except wmi.x_wmi_timed_out:
+                logging.debug('Timeout waiting for event')
+            except wmi.x_wmi as err:
+                logging.debug(err)
+            # Looking for configuration deletion...
+            try:
+                event = configDeletionWatcher()
+                try:
+                    self._qConfigDeletion.put(NetConfig(event.ole_object))
+                    self._appTk.event_generate(
+                        '<<NetConfigDeleted>>',
+                        when='tail',)
+                except TypeError:
+                    logging.debug('failed to catch NetConfig deletion')
             except wmi.x_wmi_timed_out:
                 logging.debug('Timeout waiting for event')
             except wmi.x_wmi as err:

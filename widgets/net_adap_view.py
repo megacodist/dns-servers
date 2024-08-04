@@ -125,7 +125,9 @@ class NetAdapView(tk.Frame):
                 self.addConfig(adapIdx, config, configIdx)
     
     def getSelectedIdx(self) -> ACIdx | None:
-        """Gets the index of selected interface."""
+        """Gets the index of selected item, either a network adapter or
+        network adapter configuration.
+        """
         selection = self._trvw.selection()
         match len(selection):
             case 0:
@@ -201,6 +203,15 @@ class NetAdapView(tk.Frame):
             self._mpIdxIid[adap_idx] = iid
             self._mpIidIdx[iid] = adap_idx
     
+    def delItem(self, idx: ACIdx) -> None:
+        """Deletes the specified item, either NetAdap or NetConfig, from
+        the widget.
+        """
+        iid = self._acidxToIid(idx)
+        self._trvw.delete(iid)
+        del self._mpIdxIid[idx]
+        del self._mpIidIdx[iid]
+
     def changeAdap(self, adap: NetAdap, adap_idx: ACIdx) -> None:
         iid = self._acidxToIid(adap_idx)
         self._trvw.item(iid, image=self._getImg(adap)) # type: ignore
