@@ -25,12 +25,13 @@ class NetIntDlgSettings(NamedTuple):
     value_int: int
 
 
-class WmiNetDialog(tk.Toplevel):
+class NetItemInfoWin(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            net_bag: AdapCfgBag,
+            ac_bag: AdapCfgBag,
             idx: ACIdx,
+            close_cb: Callable[[ACIdx], None] | None = None,
             *,
             xy: tuple[int, int] | None = None,
             width: int = 400,
@@ -41,11 +42,11 @@ class WmiNetDialog(tk.Toplevel):
         super().__init__(master)
         self.resizable(True, True)
         self.geometry(f'{width}x{height}')
-        self.grab_set()
         #
-        self._bag = net_bag
-        self.title(self._getTitle(idx))
-        self._idx: ACIdx
+        self._cbClose = close_cb
+        self._bag = ac_bag
+        self._idx = idx
+        self.title(self._getTitle())
         #
         self._sheet = Sheet(self, headers=[_('KEY'), _('VALUE'),])
         self._sheet.column_width(0, key_width)
@@ -73,7 +74,7 @@ class WmiNetDialog(tk.Toplevel):
             height,
             key_width,
             value_width)
-        self.changeIdx(idx, net_bag)
+        self.populate()
         if xy is None:
             self.after(10, self._centerDialog, master)
         else:
@@ -81,18 +82,8 @@ class WmiNetDialog(tk.Toplevel):
         # Binding events...
         self.protocol('WM_DELETE_WINDOW', self._onClosing)
     
-    def changeIdx(
-            self,
-            idx: ACIdx,
-            bag: AdapCfgBag | None = None,
-            ) -> None:
-        self._idx = idx
-        if bag is not None:
-            self._bag = bag
-        self._populate()
-    
-    def _getTitle(self, idx: ACIdx) -> str:
-        item = self._bag[idx]
+    def _getTitle(self) -> str:
+        item = self._bag[self._idx]
         if isinstance(item, NetAdap):
             return item.NetConnectionID
         elif isinstance(item, NetConfig):
@@ -131,19 +122,32 @@ class WmiNetDialog(tk.Toplevel):
                 int(colsWidths[1]),)
         else:
             logging.error(
-                'Cannot get the geometry of the WmiNetDialog.',
+                'Cannot get the geometry of the NetItemInfoWin.',
                 stack_info=True)
+        if self._cbClose:
+            self.after(100, self._cbClose, self._idx)
+            #self._cbClose(self._idx)
         self.destroy()
     
-    def _populate(self) -> None:
+    def _clear(self) -> None:
+        count = len(self._sheet.get_sheet_data())
+        for idx in reversed(range(count)):
+            self._sheet.delete_row(idx)
+    
+    def populate(self) -> None:
         from ntwrk import AbsNet
-        baseNet: AbsNet = self._bag[self._idx]
-        for attr in baseNet.getAttrs():
-            self._sheet.insert_row([attr, getattr(baseNet, attr)])
+        self._clear()
+        netItem: AbsNet = self._bag[self._idx]
+        for attr in netItem.getAttrs():
+            self._sheet.insert_row([attr, getattr(netItem, attr)])
+    
+    def showWin(self) -> None:
+        """Shows the window."""
+        self.grab_set()
+        self.mainloop()
     
     def showDialog(self) -> None:
-        """Shows the dialog box and returns a `DnsServer` on completion
-        or `None` on cancelation.
-        """
+        """Shows the window as dialog box."""
+        self.grab_set()
         self.wm_deiconify()
         self.wait_window()

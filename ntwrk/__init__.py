@@ -56,6 +56,14 @@ class ACIdx:
         cIdx = 0 if self.cfgIdx is None else self.cfgIdx + 1
         return ACIdx(aIdx, cIdx)
     
+    def isAdap(self) -> bool:
+        """Specifies whether this index is an adapter index or not."""
+        return self.cfgIdx is None
+    
+    def isConfig(self) -> bool:
+        """Specifies whether this index is a config index or not."""
+        return self.cfgIdx is not None
+    
     def isConfigOf(self, other: ACIdx) -> bool:
         """Specifies whether this index is a config index of the provided
         index.
@@ -140,6 +148,23 @@ class AdapCfgBag:
             if config.Index in adap._configs:
                 return ACIdx(adap.Index, config.Index)
         raise IndexError('config does not exist')
+    
+    def delIdx(self, idx: ACIdx) -> None:
+        """Deletes the specified index from the bag. Raises `IndexError`
+        if index does not exist.
+        """
+        try:
+            if idx.isAdap():
+                del self._adaps[idx.adapIdx]
+                return
+            else:
+                adap = self._adaps[idx.adapIdx]
+        except KeyError:
+            raise IndexError(f'{idx} does not exist in the bag')
+        try:
+            del adap._configs[idx.cfgIdx] # type: ignore
+        except KeyError:
+            raise IndexError(f'{idx} does not exist in the bag')
     
     def iterAdaps(self) -> Iterator[tuple[ACIdx, NetAdap]]:
         """Returns an iterator to iterate through all network adapters

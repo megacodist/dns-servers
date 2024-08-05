@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     _: Callable[[str], str]
 
 
+type _Iid = str
+
+
 class _ConnFlags(enum.IntFlag):
     NO_FLAGS = 0X0
     NTWRK = 0X1
@@ -40,15 +43,13 @@ class NetAdapView(tk.Frame):
         super().__init__(master, **kwargs)
         self._cbSelection = selection_cb
         self._cbDClick = d_click_cb
-        self._connColor = 'green'
-        self._disconnColor = '#ca482e'
         self._imgs: dict[int, TkImg] = {
             0: rntwrk_img,
             1: gntwrk_img,
             2: rinet_img,
             3: ginet_img,}
-        self._mpIidIdx = dict[str, ACIdx]()
-        self._mpIdxIid = dict[ACIdx, str]()
+        self._mpIidIdx = dict[_Iid, ACIdx]()
+        self._mpIdxIid = dict[ACIdx, _Iid]()
         self._NAME_COL_IDX = 1
         self._initGui(name_col_width)
         # Bindings...
@@ -105,12 +106,6 @@ class NetAdapView(tk.Frame):
         if self._cbDClick:
             self._cbDClick()
     
-    def _getItemColor(self, net_adap: NetAdap) -> str:
-        if net_adap.NetConnectionStatus == ConnStatus.CONNECTED:
-            return self._connColor
-        else:
-            return self._disconnColor
-    
     def clear(self) -> None:
         self._mpIidIdx.clear()
         self._mpIdxIid.clear()
@@ -143,7 +138,7 @@ class NetAdapView(tk.Frame):
                     'more than one item in the Dnsview is selected',
                     stack_info=True,)
 
-    def _iidToAcidx(self, iid: str) -> ACIdx | None:
+    def _iidToAcidx(self, iid: _Iid) -> ACIdx | None:
         try:
             return self._mpIidIdx[iid]
         except KeyError:
@@ -159,7 +154,7 @@ class NetAdapView(tk.Frame):
                     'invalid number of dash-separated parts of iid',
                     stack_info=True,)
     
-    def _acidxToIid(self, idx: ACIdx) -> str:
+    def _acidxToIid(self, idx: ACIdx) -> _Iid:
         try:
             return self._mpIdxIid[idx]
         except KeyError:

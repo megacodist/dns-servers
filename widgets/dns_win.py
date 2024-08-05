@@ -21,9 +21,11 @@ from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
 from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
+from utils.keyboard import KeyCodes, Modifiers
 from utils.net_int_monitor import NetItemMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
+from widgets.net_int_dialog import NetItemInfoWin
 
 
 if TYPE_CHECKING:
@@ -63,6 +65,7 @@ class DnsWin(tk.Tk):
         self._qConfigDeletion = Queue[NetConfig]()
         self._netItemThrd: NetItemMonitor
         """The thread looking for changes in network interfaces."""
+        self._netItemInfoWins = dict[ACIdx, NetItemInfoWin]()
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
         # Images...
@@ -107,6 +110,7 @@ class DnsWin(tk.Tk):
         # The rest of initializing...
         self._asyncMngr = AsyncOpManager(self, self._GIF_WAIT)
         # Bindings & events...
+        self.bind('<Key>', self._onKeyPressed)
         self.protocol('WM_DELETE_WINDOW', self._onWinClosing)
         self.bind('<<NetAdapChanged>>', self._onNetAdapChanged)
         self.bind('<<NetAdapCreated>>', self._onNetAdapCreated)
@@ -196,7 +200,7 @@ class DnsWin(tk.Tk):
         self._adapsvw = NetAdapView(
             self._lfrm_netAdaps,
             self._readDnsInfo,
-            self._showNetAdapInfo,
+            self._showNetItemInfo,
             gntwrk_img=self._IMG_GNTWRK,
             rntwrk_img=self._IMG_RNTWRK,
             ginet_img=self._IMG_GINET,
@@ -324,7 +328,7 @@ class DnsWin(tk.Tk):
             command=self._readNetAdaps)
         self._menu_netAdaps.add_cascade(
             label=_('SHOW_NET_INT_INFO'),
-            command=self._showNetAdapInfo)
+            command=self._showNetItemInfo)
         # Creating `Commands` menu...
         self._menu_cmds = tk.Menu(
             master=self._menubar,
@@ -377,6 +381,9 @@ class DnsWin(tk.Tk):
             pass
         else:
             self._netItemThrd.join()
+        # Closing open NetItemInfoWin windows...
+        for netWin in self._netItemInfoWins.values():
+            netWin.destroy()
         # Destroying the window...
         self.destroy()
     
@@ -401,6 +408,17 @@ class DnsWin(tk.Tk):
         else:
             logging.error(
                 'Cannot get the geometry of the window.', stack_info=True)
+    
+    def _onKeyPressed(self, event: tk.Event) -> None:
+        if isinstance(event.state, str):
+            logging.error('invalid state\n%s: str', event.state)
+            return
+        if (event.state & Modifiers.CONTROL) == Modifiers.CONTROL:
+            # Checking Ctrl+O...
+            if event.keycode == KeyCodes.O:
+                for idx, adap in self._acbag.iterAdaps():
+                    if adap.NetConnectionID == 'Ethernet':
+                        pass
     
     def _onNetAdapChanged(self, _: tk.Event) -> None:
         newAdap = self._qAdapChange.get()
@@ -436,7 +454,7 @@ class DnsWin(tk.Tk):
             return
         #
         vwIdx = self._adapsvw.getSelectedIdx()
-        if vwIdx is not None and vwIdx == adapIdx:
+        if vwIdx is not None and vwIdx.getAdap() == adapIdx:
             self._ipsvw.clear()
         self._adapsvw.delItem(adapIdx)
     
@@ -465,7 +483,14 @@ class DnsWin(tk.Tk):
         pass
 
     def _onNetConfigDeleted(self, _: tk.Event) -> None:
-        pass
+        newConfig = self._qConfigChange.get()
+        try:
+            configIdx = self._acbag.indexConfig(newConfig)
+        except IndexError:
+            logging.info(
+                'NetConfig change does not have any peer in the App.\n%s',
+                newConfig,)
+            return
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
@@ -537,9 +562,10 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
     
-    def _getNetAdapIdx(self) -> ACIdx | None:
-        """Gets the selected network interface index. If nothing is
-        selected, it informs the user and returns `None`.
+    def _getNetItemIdx(self) -> ACIdx | None:
+        """Gets the selected WMI network item (either adapter or
+        configuration) index. If nothing is selected, it informs the user
+        and returns `None`.
         """
         idx = self._adapsvw.getSelectedIdx()
         if idx is None:
@@ -549,13 +575,12 @@ class DnsWin(tk.Tk):
             return
         return idx
     
-    def _showNetAdapInfo(self) -> None:
-        idx = self._getNetAdapIdx()
+    def _showNetItemInfo(self) -> None:
+        idx = self._getNetItemIdx()
         if idx is None:
             return
         #
-        from widgets.net_int_dialog import WmiNetDialog
-        netIntDlg = WmiNetDialog(
+        netIntDlg = NetItemInfoWin(
             self,
             self._acbag,
             idx,
@@ -564,8 +589,15 @@ class DnsWin(tk.Tk):
             height=self._settings.nid_height,
             key_width=self._settings.nid_key_width,
             value_width=self._settings.nid_value_width,)
-        netIntDlg.showDialog()
-        nidSettings = netIntDlg.settings
+        netIntDlg.showWin()
+    
+    def _onNetItemInfoWinClosed(self, idx: ACIdx) -> None:
+        try:
+            netItemInfoWin = self._netItemInfoWins[idx]
+        except KeyError:
+            logging.error()
+            return
+        nidSettings = netItemInfoWin.settings
         self._settings.nid_x = nidSettings.x
         self._settings.nid_y = nidSettings.y
         self._settings.nid_width = nidSettings.width
@@ -652,7 +684,7 @@ class DnsWin(tk.Tk):
     
     def _setIps(self) -> None:
         # Reading network interface index...
-        netIntIdx = self._getNetAdapIdx()
+        netIntIdx = self._getNetItemIdx()
         if netIntIdx is None:
             return
         try:
@@ -668,7 +700,7 @@ class DnsWin(tk.Tk):
     
     def _testUrl(self) -> None:
         # Reading network interface name...
-        idx = self._getNetAdapIdx()
+        idx = self._getNetItemIdx()
         if idx is None:
             return
         #

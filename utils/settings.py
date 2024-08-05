@@ -22,7 +22,7 @@ class AppSettings(types_module.AppSettings):
     secon_4_col_width = 100
     prim_6_col_width = 100
     secon_6_col_width = 100
-    # WmiNetDialog...
+    # NetItemInfoWin...
     nid_x = 200
     nid_y = 200
     nid_width = 400
