@@ -232,36 +232,41 @@ class IpsView(ttk.Frame):
         self._msg = ''
         self._ips.clear()
         self._nmRoles.clear()
-    
+
     def populate(
             self,
-            net_adap: NetAdap,
+            net_item: NetAdap | NetConfig,
             dnses: Iterable[DnsServer],
-            config_idx: int | None = None,
             ) -> None:
         self.clear()
-        if len(net_adap.Configs) == 0:
+        if isinstance(net_item, NetAdap):
+            nConfigs = len(net_item.Configs)
+            if nConfigs == 1:
+                config = net_item.Configs[0]
+        elif isinstance(net_item, NetConfig):
+            nConfigs = 1
+            config = net_item
+        else:
+            raise TypeError(
+                'expected NetAdap or NetConfig but got '
+                f'{net_item.__class__.__qualname__}')
+        #
+        if nConfigs > 1:
+            self._mode = _RedrawMode.MSG
+            self._msg = _('MANY_ADAP_CONFIGS')
+        elif nConfigs == 0:
             self._mode = _RedrawMode.MSG
             self._msg = _('NO_ADAP_CONFIG')
-        elif len(net_adap.Configs) == 1:
-            if net_adap.Configs[0].DNSServerSearchOrder is not None:
+        else:
+            if config.DNSServerSearchOrder is not None: # type: ignore
                 self._mode = _RedrawMode.IPS
-                self._populateTable(net_adap.Configs[0], dnses)
+                self._populateTable(config, dnses) # type: ignore
             else:
                 self._mode = _RedrawMode.MSG
-                if  net_adap.dhcpAccess():
+                if  net_item.dhcpAccess():
                     self._msg = _('NET_ADAP_DHCP')
                 else:
                     self._msg = _('NO_DHCP_NO_DNS')
-        else:
-            try:
-                config = net_adap.Configs[config_idx] # type: ignore
-            except (IndexError, TypeError):
-                self._mode = _RedrawMode.MSG
-                self._msg = _('MANY_ADAP_CONFIGS')
-            else:
-                self._populateTable(config, dnses)
-                self._mode = _RedrawMode.IPS
         self._redraw()
     
     def _populateTable(

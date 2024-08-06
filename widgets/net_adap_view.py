@@ -198,7 +198,7 @@ class NetAdapView(tk.Frame):
             self._mpIdxIid[adap_idx] = iid
             self._mpIidIdx[iid] = adap_idx
     
-    def delItem(self, idx: ACIdx) -> None:
+    def delIdx(self, idx: ACIdx) -> None:
         """Deletes the specified item, either NetAdap or NetConfig, from
         the widget.
         """

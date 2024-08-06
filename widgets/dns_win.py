@@ -65,7 +65,7 @@ class DnsWin(tk.Tk):
         self._qConfigDeletion = Queue[NetConfig]()
         self._netItemThrd: NetItemMonitor
         """The thread looking for changes in network interfaces."""
-        self._netItemInfoWins = dict[ACIdx, NetItemInfoWin]()
+        self._infoWins = dict[ACIdx, NetItemInfoWin]()
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
         # Images...
@@ -200,7 +200,7 @@ class DnsWin(tk.Tk):
         self._adapsvw = NetAdapView(
             self._lfrm_netAdaps,
             self._readDnsInfo,
-            self._showNetItemInfo,
+            self._showInfoWin,
             gntwrk_img=self._IMG_GNTWRK,
             rntwrk_img=self._IMG_RNTWRK,
             ginet_img=self._IMG_GINET,
@@ -328,7 +328,7 @@ class DnsWin(tk.Tk):
             command=self._readNetAdaps)
         self._menu_netAdaps.add_cascade(
             label=_('SHOW_NET_INT_INFO'),
-            command=self._showNetItemInfo)
+            command=self._showInfoWin)
         # Creating `Commands` menu...
         self._menu_cmds = tk.Menu(
             master=self._menubar,
@@ -382,8 +382,11 @@ class DnsWin(tk.Tk):
         else:
             self._netItemThrd.join()
         # Closing open NetItemInfoWin windows...
-        for netWin in self._netItemInfoWins.values():
+        lsInfoWins = list(self._infoWins.values())
+        for netWin in lsInfoWins[:-1]:
             netWin.destroy()
+        lsInfoWins[-1].closeWin()
+        self._grabInoWinSettings(lsInfoWins[-1])
         # Destroying the window...
         self.destroy()
     
@@ -443,20 +446,27 @@ class DnsWin(tk.Tk):
         pass
 
     def _onNetAdapDeleted(self, _: tk.Event) -> None:
-        newAdap = self._qAdapDeletion.get()
+        delAdap = self._qAdapDeletion.get()
         try:
-            adapIdx = self._acbag.indexAdap(newAdap)
+            adapIdx = self._acbag.indexAdap(delAdap)
         except IndexError:
             logging.info(
-                ('deletion of the following NetAdap that did not loaded into'
-                ' the app.\n%s'),
-                newAdap,)
+                '%s was deleted does and has not loaded into the App.',
+                delAdap,)
             return
+        # Closing its info win if any...
+        try:
+            infoWin = self._infoWins[adapIdx]
+        except KeyError:
+            pass
+        else:
+            infoWin.closeWin()
         #
         vwIdx = self._adapsvw.getSelectedIdx()
         if vwIdx is not None and vwIdx.getAdap() == adapIdx:
             self._ipsvw.clear()
-        self._adapsvw.delItem(adapIdx)
+        #
+        self._adapsvw.delIdx(adapIdx)
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         newConfig = self._qConfigChange.get()
@@ -464,33 +474,67 @@ class DnsWin(tk.Tk):
             configIdx = self._acbag.indexConfig(newConfig)
         except IndexError:
             logging.info(
-                'NetConfig change does not have any peer in the App.\n%s',
+                '%s changed but has not loaded into the App.',
                 newConfig,)
             return
         curConfig: NetConfig = self._acbag[configIdx] # type: ignore
+        # Updating `_acbag`...`
         changed = curConfig.update(newConfig)
         if not changed:
-            print(f'no important change in {repr(newConfig)}')
+            logging.info(f'no important change in {repr(newConfig)}')
             return
-        #
-        print(f'{newConfig} changed')
+        # Updaing its info win if any...
+        try:
+            infoWin = self._infoWins[configIdx]
+        except KeyError:
+            pass
+        else:
+            infoWin.populateInfo()
+        # Updating adaps view...
         self._adapsvw.changeConfig(newConfig, configIdx)
         adapIdx = configIdx.getAdap()
         adap: NetAdap = self._acbag[adapIdx] # type: ignore
         self._adapsvw.changeAdap(adap, adapIdx)
+        # Updating IpsView...
+        vwIdx = self._getNetItemIdx()
+        if vwIdx is not None and (vwIdx == configIdx or
+                vwIdx == configIdx.getAdap()):
+            self._ipsvw.populate(newConfig, self._mpNameDns.values())
     
     def _onNetConfigCreated(self, _: tk.Event) -> None:
         pass
 
     def _onNetConfigDeleted(self, _: tk.Event) -> None:
-        newConfig = self._qConfigChange.get()
+        delConfig = self._qConfigChange.get()
         try:
-            configIdx = self._acbag.indexConfig(newConfig)
+            configIdx = self._acbag.indexConfig(delConfig)
         except IndexError:
             logging.info(
-                'NetConfig change does not have any peer in the App.\n%s',
-                newConfig,)
+                '%s was deleted does and has not loaded into the App.',
+                delConfig,)
             return
+        # Removing from the bag...
+        self._acbag.delIdx(configIdx)
+        # Closing its info win if any...
+        try:
+            infoWin = self._infoWins[configIdx]
+        except KeyError:
+            pass
+        else:
+            infoWin.closeWin()
+        # Updating IpsView...
+        vwIdx = self._getNetItemIdx()
+        adapIdx = configIdx.getAdap()
+        if vwIdx is not None:
+            if vwIdx == configIdx:
+                self._ipsvw.clear()
+            elif vwIdx == adapIdx:
+                self._ipsvw.populate(
+                    self._acbag[adapIdx], # type: ignore
+                    self._mpNameDns.values(),
+                    configIdx.cfgIdx,)
+        #
+        self._adapsvw.delIdx(configIdx)
     
     def _initViews(self) -> None:
         """Initializes the interface view and the """
@@ -575,29 +619,41 @@ class DnsWin(tk.Tk):
             return
         return idx
     
-    def _showNetItemInfo(self) -> None:
+    def _showInfoWin(self) -> None:
         idx = self._getNetItemIdx()
         if idx is None:
             return
         #
-        netIntDlg = NetItemInfoWin(
+        infoWin = NetItemInfoWin(
             self,
             self._acbag,
             idx,
+            self._onInfoWinClosed,
             xy=(self._settings.nid_x, self._settings.nid_y,),
             width=self._settings.nid_width,
             height=self._settings.nid_height,
             key_width=self._settings.nid_key_width,
             value_width=self._settings.nid_value_width,)
-        netIntDlg.showWin()
+        self._infoWins[idx] = infoWin
+        infoWin.showWin()
     
-    def _onNetItemInfoWinClosed(self, idx: ACIdx) -> None:
+    def _onInfoWinClosed(self, idx: ACIdx) -> None:
         try:
-            netItemInfoWin = self._netItemInfoWins[idx]
+            infoWin = self._infoWins[idx]
+            del self._infoWins[idx]
         except KeyError:
-            logging.error()
+            logging.error(
+                'an attempt to close an info window but index does not exist\n%s',
+                idx,
+                stack_info=True,)
             return
-        nidSettings = netItemInfoWin.settings
+        self._grabInoWinSettings(infoWin)
+    
+    def _grabInoWinSettings(self, info_win: NetItemInfoWin) -> None:
+        """Grabs settings for a `NetItemInfoWin` to save into the
+        `_settings` attribute.
+        """
+        nidSettings = info_win.settings
         self._settings.nid_x = nidSettings.x
         self._settings.nid_y = nidSettings.y
         self._settings.nid_width = nidSettings.width

@@ -74,13 +74,13 @@ class NetItemInfoWin(tk.Toplevel):
             height,
             key_width,
             value_width)
-        self.populate()
+        self.populateInfo()
         if xy is None:
             self.after(10, self._centerDialog, master)
         else:
             self.geometry(f'+{xy[0]}+{xy[1]}')
         # Binding events...
-        self.protocol('WM_DELETE_WINDOW', self._onClosing)
+        self.protocol('WM_DELETE_WINDOW', self.closeWin)
     
     def _getTitle(self) -> str:
         item = self._bag[self._idx]
@@ -99,7 +99,7 @@ class NetItemInfoWin(tk.Toplevel):
         y = int(y) + (parent.winfo_height() - self.winfo_height()) // 2
         self.geometry(f'+{x}+{y}')
     
-    def _onClosing(self) -> None:
+    def closeWin(self) -> None:
         import re
         w_h_x_y = self.winfo_geometry()
         GEOMETRY_REGEX = r"""
@@ -134,7 +134,7 @@ class NetItemInfoWin(tk.Toplevel):
         for idx in reversed(range(count)):
             self._sheet.delete_row(idx)
     
-    def populate(self) -> None:
+    def populateInfo(self) -> None:
         from ntwrk import AbsNet
         self._clear()
         netItem: AbsNet = self._bag[self._idx]

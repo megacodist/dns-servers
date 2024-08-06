@@ -166,6 +166,36 @@ class AdapCfgBag:
         except KeyError:
             raise IndexError(f'{idx} does not exist in the bag')
     
+    def addAdap(self, adap: NetAdap) -> None:
+        """Adds the provided `NetAdap` object to this bag. Raises
+        `ValueError` if an adapter object with the same `Index` alreadt
+        exists.
+        """
+        if adap.Index in self._adaps:
+            raise ValueError(
+                f'a NetAdap with `Index` of {adap.Index} already exists')
+        self._adaps[adap.Index] = adap
+    
+    def addConfig(self, config: NetConfig, adap_idx: ACIdx) -> None:
+        """Adds a config to the specified adapter index.
+        #### Excepitons:
+        * `ValueError`: `adap_idx` is not an adapter index or no adapter
+        with this index exists.
+        * `ValueError`: the specified adapter already contains a config
+        like this one.
+        """
+        if not adap_idx.isAdap():
+            raise ValueError(f'{adap_idx} is not an adapter index')
+        try:
+            adap = self._adaps[adap_idx.adapIdx]
+        except KeyError:
+            raise IndexError(f'no adapter with {adap_idx} index')
+        if config.Index in adap._configs:
+            raise ValueError(
+                f'{adap} already contains a config with Index of '
+                f'{config.Index}')
+        adap._configs[config.Index] = config
+    
     def iterAdaps(self) -> Iterator[tuple[ACIdx, NetAdap]]:
         """Returns an iterator to iterate through all network adapters
         alongside their `ACIdx`.
