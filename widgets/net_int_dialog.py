@@ -135,9 +135,9 @@ class NetItemInfoWin(tk.Toplevel):
             self._sheet.delete_row(idx)
     
     def populateInfo(self) -> None:
-        from ntwrk import AbsNet
+        from ntwrk import AbsNetItem
         self._clear()
-        netItem: AbsNet = self._bag[self._idx]
+        netItem: AbsNetItem = self._bag[self._idx]
         for attr in netItem.getAttrs():
             self._sheet.insert_row([attr, getattr(netItem, attr)])
     

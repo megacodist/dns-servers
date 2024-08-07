@@ -107,46 +107,37 @@ class AdapCfgBag:
             raise IndexError(
                 f'no network adapter config with Index={idx.cfgIdx}')
     
-    def areEquivalent(self, a: ACIdx, b: ACIdx) -> bool:
-        """Specifies whether these two indicies can refer to the same
-        config. For exampe `ACIdx(1, 0)` and `ACIdx(1, None)` if the
-        adapter with index of 1 has only on config, are equilvalently
-        refer to the same config.
-        """
-        if a.adapIdx != b.adapIdx:
-            return False
-        cIndicies = set([a.cfgIdx, b.cfgIdx,])
-        if len(cIndicies) == 1:
-            return True
-        elif cIndicies == set([0, None]):
-            return len(self._adaps[a.adapIdx].Configs) == 1
-        else:
-            return False
-    
     def indexAdap(self, adap: NetAdap) -> ACIdx:
-        """Get the index of the provided `NetAdap` in the bag. Raises
-        `ACIdxError` if it has not been found.
+        """Get the index of the provided `NetAdap` in the bag. It raises:
+        * `IndexError`: if it has not been found.
+        * `ValueError`: it found but with contradictory determinant
+        attributes.
         """
         try:
             a = self._adaps[adap.Index]
         except KeyError:
-            raise IndexError('')
-        if a == adap:
+            raise IndexError(f'{adap} not found in the bag')
+        if adap.equalIdentityTo(a):
             return ACIdx(adap.Index, None)
         else:
-            raise IndexError('')
+            raise ValueError(
+                f'contradictory determinants of {adap} in the bag')
     
     def indexConfig(
             self,
             config: NetConfig,
             ) -> ACIdx:
         """Searches for a network adapter configuration in a bag of
-        network adapters and configurations. It raises `IndexError` if
-        it does not find it.
+        network adapters and configurations. It raises:
+        * `IndexError`: if not found.
+        * `ValueError`: there is a contradictory peer.
         """
         for adap in self._adaps.values():
             if config.Index in adap._configs:
-                return ACIdx(adap.Index, config.Index)
+                if config.equalIdentityTo(self._adaps[config.Index]):
+                    return ACIdx(adap.Index, config.Index)
+                else:
+                    raise ValueError('a contradictory peer found')
         raise IndexError('config does not exist')
     
     def delIdx(self, idx: ACIdx) -> None:
@@ -176,25 +167,23 @@ class AdapCfgBag:
                 f'a NetAdap with `Index` of {adap.Index} already exists')
         self._adaps[adap.Index] = adap
     
-    def addConfig(self, config: NetConfig, adap_idx: ACIdx) -> None:
-        """Adds a config to the specified adapter index.
+    def addConfig(self, config: NetConfig) -> None:
+        """Adds a config to the bag.
         #### Excepitons:
-        * `ValueError`: `adap_idx` is not an adapter index or no adapter
-        with this index exists.
-        * `ValueError`: the specified adapter already contains a config
-        like this one.
+        * `IndexError`: the config index already exists in the 
+        corresponding adapter.
+        * `ValueError`: no corresponding adapter found
         """
-        if not adap_idx.isAdap():
-            raise ValueError(f'{adap_idx} is not an adapter index')
-        try:
-            adap = self._adaps[adap_idx.adapIdx]
-        except KeyError:
-            raise IndexError(f'no adapter with {adap_idx} index')
-        if config.Index in adap._configs:
-            raise ValueError(
-                f'{adap} already contains a config with Index of '
-                f'{config.Index}')
-        adap._configs[config.Index] = config
+        for adap in self._adaps.values():
+            if adap._Caption == config._Caption:
+                if config.Index in adap._configs:
+                    raise IndexError(
+                        'the config index already exists in the '
+                        'corresponding adap')
+                else:
+                    adap._configs[config.Index] = config
+                    return
+        raise ValueError(f'unable to add {config} to the bag')
     
     def iterAdaps(self) -> Iterator[tuple[ACIdx, NetAdap]]:
         """Returns an iterator to iterate through all network adapters
@@ -415,7 +404,7 @@ class MAC:
         return self._macAddr == "FF:FF:FF:FF:FF:FF"
 
 
-class AbsNet(ABC):
+class AbsNetItem(ABC):
     def __repr__(self) -> str:
         attrValues = list[str]()
         for attr in self.getDeterminant(leading_under=True):
@@ -428,13 +417,33 @@ class AbsNet(ABC):
         return f"<{self.__class__.__qualname__} {msg}>"
     
     def __eq__(self, value: object) -> bool:
-        if not isinstance(value, AbsNet):
+        if not isinstance(value, self.__class__):
             return NotImplemented
-        selfDet = set(self.getDeterminant())
-        valueDet = set(value.getDeterminant())
+        return self.equalIdentityTo(value)
+    
+    def equalIdentityTo(self, value: AbsNetItem) -> bool:
+        """Checks whether the identity (deteminant attributes) of this
+        object is equal to the provided object or not. It is an alias for
+        equality operator (`==`).
+        """
+        selfDet = set(self.getDeterminant(leading_under=True))
+        valueDet = set(value.getDeterminant(leading_under=True))
         if selfDet != valueDet:
             return False
         for attr in selfDet:
+            if getattr(self, attr) != getattr(value, attr):
+                return False
+        return True
+    
+    def equalValueTo(self, value: AbsNetItem) -> bool:
+        """Checks whther this object has the same value as the provided
+        object (checks all the attributes including determinants).
+        """
+        selfAttrs = set(self.getAttrs(leading_under=True))
+        valueAttrs = set(value.getAttrs(leading_under=True))
+        if selfAttrs != valueAttrs:
+            return False
+        for attr in selfAttrs:
             if getattr(self, attr) != getattr(value, attr):
                 return False
         return True
@@ -489,7 +498,7 @@ class AbsNet(ABC):
         return tuple([attr[1:] for attr in attrs])
 
 
-class NetAdap(AbsNet):
+class NetAdap(AbsNetItem):
     """Instances of this class represent instances of `Win32_NetworkAdapter`
     class on WMI.
     """
@@ -501,27 +510,75 @@ class NetAdap(AbsNet):
 
     def __init__(self, obj: Any) -> None:
         """Initializes an instance of `NetAdap` class with an object that
-        provide necessary attributes. It raises `TypeError` if `obj` does not
-        have enough attributes
+        provide necessary attributes. It raises `TypeError` if `obj` lacks
+        some attributes or exposes type mismatch.
         """
         try:
+            # Setting `Description` attribute...
+            try:
+                _assertAsStr(obj.Description)
+            except AssertionError:
+                raise TypeError(f'expected `Description` as `str` but got '
+                    f'`{obj.Description.__class__.__qualname__}`')
             self._Description: str = obj.Description
+            # Setting `DeviceID` attribute...
+            try:
+                _assertAsStr(obj.DeviceID)
+            except AssertionError:
+                raise TypeError(f'expected `DeviceID` as `str` but got '
+                    f'`{obj.DeviceID.__class__.__qualname__}`')
             self._DeviceID: str = obj.DeviceID
             """The Unique identifier of the network adapter from other
             devices on the system.
             """
+            # Setting `Caption` attribute...
+            try:
+                _assertAsStr(obj.Caption)
+            except AssertionError:
+                raise TypeError(f'expected `Caption` as `str` but got '
+                    f'`{obj.Caption.__class__.__qualname__}`')
             self._Caption: str = obj.Caption
             """A short description of the instance, a one-line string."""
+            # Setting `Index` attribute...
+            try:
+                _assertAsInt(obj.Index)
+            except AssertionError:
+                raise TypeError(f'expected `Index` as `int` but got '
+                    f'`{obj.Index.__class__.__qualname__}`')
             self._Index: int = obj.Index
             """Index number of the network adapter, stored in the system
             registry.
             """
+            # Setting `InterfaceIndex` attribute...
+            try:
+                _assertAsInt(obj.InterfaceIndex)
+            except AssertionError:
+                raise TypeError(f'expected `InterfaceIndex` as `int` but got '
+                    f'`{obj.InterfaceIndex.__class__.__qualname__}`')
             self._InterfaceIndex: int = obj.InterfaceIndex
+            # Setting `NetConnectionID` attribute...
+            try:
+                _assertAsStr(obj.NetConnectionID)
+            except AssertionError:
+                raise TypeError(f'expected `NetConnectionID` as `str` but got '
+                    f'`{obj.NetConnectionID.__class__.__qualname__}`')
             self._NetConnectionID: str = obj.NetConnectionID
             """The name of this network interface in the shell."""
             self._NetConnectionStatus: int = obj.NetConnectionStatus
-            self._MACAddress: str | None = obj.MACAddress
+            # Setting `GUID` attribute...
+            try:
+                _assertAsStr(obj.GUID)
+            except AssertionError:
+                raise TypeError(f'expected `GUID` as `str` but got '
+                    f'`{obj.GUID.__class__.__qualname__}`')
             self._GUID: str = obj.GUID
+            # Setting `MACAddress` attribute...
+            try:
+                _assertAsStrNone(obj.MACAddress)
+            except AssertionError:
+                raise TypeError(f'expected `MACAddress` as `str` or `None`'
+                    f' but got `{obj.MACAddress.__class__.__qualname__}`')
+            self._MACAddress: str | None = obj.MACAddress
         except AttributeError as err:
             raise TypeError(err.args)
         else:
@@ -593,7 +650,7 @@ class NetAdap(AbsNet):
         return any(config.dhcpAccess() for config in self._configs.values())
 
 
-class NetConfig(AbsNet):
+class NetConfig(AbsNetItem):
     """Instances of this class represent instances of
     `Win32_NetworkAdapterConfiguration` class on WMI.
     """
@@ -601,42 +658,111 @@ class NetConfig(AbsNet):
     def __init__(self, obj: Any) -> None:
         """Initializes an instance of `NetConfig` class with an object
         that provide necessary attributes. It raises `TypeError` if `obj` 
-        does not have enough attributes
+        lacks some attributes or exposes type mismatch.
         """
         try:
+            # Setting `Caption` attribute...
+            try:
+                _assertAsStr(obj.Caption)
+            except AssertionError:
+                raise TypeError(f'expected `Caption` as `str` but got '
+                    f'`{obj.Caption.__class__.__qualname__}`')
             self._Caption: str = obj.Caption
             """A short description of the instance, a one-line string."""
+            # Setting `SettingID` attribute...
+            try:
+                _assertAsStr(obj.SettingID)
+            except AssertionError:
+                raise TypeError(f'expected `SettingID` as `str` but got '
+                    f'`{obj.SettingID.__class__.__qualname__}`')
             self._SettingID: str = obj.SettingID
+            # Setting `Index` attribute...
+            try:
+                _assertAsInt(obj.Index)
+            except AssertionError:
+                raise TypeError(f'expected `Index` as `int` but got '
+                    f'`{obj.Index.__class__.__qualname__}`')
             self._Index: int = obj.Index
             """A network adapter (an instance of `NetAdap`) can
             have multiple configuration and each of them has a unique `Index`.
             """
+            # Setting `InterfaceIndex` attribute...
+            try:
+                _assertAsInt(obj.InterfaceIndex)
+            except AssertionError:
+                raise TypeError(f'expected `InterfaceIndex` as `int` but got '
+                    f'`{obj.InterfaceIndex.__class__.__qualname__}`')
             self._InterfaceIndex: int = obj.InterfaceIndex
+            # Setting `IPEnabled` attribute...
+            try:
+                _assertAsBool(obj.IPEnabled)
+            except AssertionError:
+                raise TypeError(f'expected `IPEnabled` as `bool` but got '
+                    f'`{obj.IPEnabled.__class__.__qualname__}`')
             self._IPEnabled: bool = obj.IPEnabled
             """Specifies whether this network interface can use IP protocol
             for its network communicatiopns.
             """
+            # Setting `IPAddress` attribute...
+            try:
+                _assertAsTupleStrNone(obj.IPAddress)
+            except AssertionError:
+                raise TypeError(f'expected `IPAddress` as `tuple[str, ...] | '
+                    f'None` but got `{obj.IPAddress.__class__.__qualname__}`')
             self._IPAddress: tuple[str, ...] | None = obj.IPAddress
             """The optional IP addresses assigned to this network interface.
             It's a crucial property for identifying and communicating with a
             device on a network.
             """
+            # Setting `DHCPEnabled` attribute...
+            try:
+                _assertAsBool(obj.DHCPEnabled)
+            except AssertionError:
+                raise TypeError(f'expected `DHCPEnabled` as `bool` but got '
+                    f'`{obj.DHCPEnabled.__class__.__qualname__}`')
             self._DHCPEnabled: bool = obj.DHCPEnabled
             """Whether this network interface is configured to obtain obtain
             its network configuration settings, such as IP address, subnet
             mask, default gateway, and DNS server addresses; automatically
             through DHCP.
             """
+            # Setting `DHCPServer` attribute...
+            try:
+                _assertAsStrNone(obj.DHCPServer)
+            except AssertionError:
+                raise TypeError(f'expected `DHCPServer` as `str` or `None`'
+                    f' but got `{obj.DHCPServer.__class__.__qualname__}`')
             self._DHCPServer: str | None = obj.DHCPServer
             """Specifies the IP address of the DHCP server that will provide
             the necessary network configurations.
             """
+            # Setting `DNSServerSearchOrder` attribute...
+            try:
+                _assertAsTupleStrNone(obj.DNSServerSearchOrder)
+            except AssertionError:
+                raise TypeError(f'expected `DNSServerSearchOrder` as '
+                    '`tuple[str, ...] | None` but got '
+                    f'`{obj.DNSServerSearchOrder.__class__.__qualname__}`')
             self._DNSServerSearchOrder: tuple[str, ...] | None = \
                 obj.DNSServerSearchOrder
-            self._DefaultIPGateway: tuple[str, ...] | None = obj.DefaultIPGateway
+            # Setting `DefaultIPGateway` attribute...
+            try:
+                _assertAsTupleStrNone(obj.DefaultIPGateway)
+            except AssertionError:
+                raise TypeError(f'expected `DefaultIPGateway` as '
+                    '`tuple[str, ...] | None` but got '
+                    f'`{obj.DefaultIPGateway.__class__.__qualname__}`')
+            self._DefaultIPGateway: tuple[str, ...] | None = \
+                obj.DefaultIPGateway
             """An optional tuple of IP addresses of default gateways that the
             computer system uses.
             """
+            # Setting `MACAddress` attribute...
+            try:
+                _assertAsStrNone(obj.MACAddress)
+            except AssertionError:
+                raise TypeError(f'expected `MACAddress` as `str` or `None`'
+                    f' but got `{obj.MACAddress.__class__.__qualname__}`')
             self._MACAddress: str | None = obj.MACAddress
         except AttributeError as err:
             raise TypeError(err.args)
@@ -755,8 +881,8 @@ def _enumNetAdaps() -> AdapCfgBag:
     #_saveWmiObj(wmiConfigs, r'H:\foo2-configs.txt') # type: ignore
     # Merging results...
     # Converting COM objects into `NetAdap` objects...
-    mpAdapters = dict[str, NetAdap]()
-    missAdaps = list[NetAdap]()
+    acbag = AdapCfgBag()
+    dupAdaps = list[NetAdap]()
     badWmiAdaps = False
     for adap in wmiAdaps:
         try:
@@ -765,35 +891,66 @@ def _enumNetAdaps() -> AdapCfgBag:
             badWmiAdaps = True
             continue
         try:
-            mpAdapters[adap.Caption] = adap
+            acbag.addAdap(adap)
         except ValueError:
-            missAdaps.append(adap)
+            dupAdaps.append(adap)
     if badWmiAdaps:
         logging.error('some COM objects cannot be converted into "NetAdap"')
     #
-    missCfgs = list[NetConfig]()
+    dupCfgs = list[NetConfig]()
     badWmiCfgs = False
-    for cfg in wmiConfigs:
+    for config in wmiConfigs:
         try:
-            cfg = NetConfig(cfg)
+            config = NetConfig(config)
         except  TypeError:
             badWmiCfgs = True
             continue
         try:
-            mpAdapters[cfg._Caption]._configs[cfg.Index] = cfg
-        except KeyError:
-            missCfgs.append(cfg)
+            acbag.addConfig(config)
+        except IndexError:
+            dupCfgs.append(config)
+        except ValueError:
+            pass
     if badWmiCfgs:
         logging.error(
             'some COM objects cannot be converted into "NetConfig"')
     #
-    if missAdaps and missCfgs:
+    if dupAdaps and dupCfgs:
         print("Merging should've been continued!!!")
     #
     pythoncom.CoUninitialize()
-    acBag = AdapCfgBag()
-    acBag._adaps = {adap.Index:adap for adap in mpAdapters.values()}
-    return acBag
+    return acbag
+
+
+def _assertAsStr(obj: Any) -> None:
+    """Asserts that the argument is `str`."""
+    assert isinstance(obj, str), \
+        f'expected str but got {obj.__class__.__qualname__}'
+
+
+def _assertAsInt(obj: Any) -> None:
+    """Asserts that the argument is `int``."""
+    assert isinstance(obj, int), \
+        f'expected int but got {obj.__class__.__qualname__}'
+
+
+def _assertAsBool(obj: Any) -> None:
+    """Asserts that the argument is `int``."""
+    assert isinstance(obj, bool), \
+        f'expected bool but got {obj.__class__.__qualname__}'
+
+
+def _assertAsStrNone(obj: Any) -> None:
+    """Asserts that the argument is `str | None``."""
+    assert (isinstance(obj, str) or obj is None), \
+        f'expected str or None but got {obj.__class__.__qualname__}'
+
+
+def _assertAsTupleStrNone(obj: Any) -> None:
+    """Asserts that the argument is `tuple[str, ...] | None``."""
+    assert obj is None or (isinstance(obj, tuple) and all(
+        isinstance(item, str) for item in obj)), \
+        f'{obj} is neither a tuple of strings nor None'
 
 
 def _toIpTuple(

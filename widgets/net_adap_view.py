@@ -25,13 +25,13 @@ class _ConnFlags(enum.IntFlag):
     INET = 0X2
 
 
-class NetAdapView(tk.Frame):
+class NetAdapsView(tk.Frame):
     def __init__(
             self,
             master: tk.Misc,
             selection_cb: Callable[[ACIdx | None], None] | \
                 None = None,
-            d_click_cb: Callable[[], None] | None = None,
+            d_click_cb: Callable[[ACIdx], None] | None = None,
             *,
             name_col_width: int = 200,
             gntwrk_img: TkImg,
@@ -103,8 +103,9 @@ class NetAdapView(tk.Frame):
             self._cbSelection(selection)
     
     def _onDoubleClicked(self, _: tk.Event) -> None:
-        if self._cbDClick:
-            self._cbDClick()
+        selected = self.getSelectedIdx()
+        if self._cbDClick is not None and selected is not None:
+            self._cbDClick(selected)
     
     def clear(self) -> None:
         self._mpIidIdx.clear()
@@ -117,7 +118,7 @@ class NetAdapView(tk.Frame):
         for adapIdx, adap in bag.iterAdaps():
             self.addAdap(adap, adapIdx)
             for configIdx, config in bag.iterConfigs(adapIdx):
-                self.addConfig(adapIdx, config, configIdx)
+                self.addConfig(config, configIdx)
     
     def getSelectedIdx(self) -> ACIdx | None:
         """Gets the index of selected item, either a network adapter or
@@ -184,19 +185,18 @@ class NetAdapView(tk.Frame):
     
     def addConfig(
             self,
-            adap_idx: ACIdx,
             config: NetConfig,
             config_idx: ACIdx,
             ) -> None:
         proposedIid = self._acidxToIid(config_idx)
         iid = self._trvw.insert(
-            parent=self._acidxToIid(adap_idx),
+            parent=self._acidxToIid(config_idx.getAdap()),
             index=tk.END,
             iid=proposedIid,
             values=(config.Index,),)
         if iid != proposedIid:
-            self._mpIdxIid[adap_idx] = iid
-            self._mpIidIdx[iid] = adap_idx
+            self._mpIdxIid[config_idx] = iid
+            self._mpIidIdx[iid] = config_idx
     
     def delIdx(self, idx: ACIdx) -> None:
         """Deletes the specified item, either NetAdap or NetConfig, from

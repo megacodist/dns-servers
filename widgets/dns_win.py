@@ -15,7 +15,7 @@ import PIL.Image
 import PIL.ImageTk
 
 from .dns_view import Dnsview
-from .net_adap_view import NetAdapView
+from .net_adap_view import NetAdapsView
 from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
@@ -197,7 +197,7 @@ class DnsWin(tk.Tk):
         self._lfrm_netAdaps.pack(fill=tk.BOTH, expand=True)
         self._pwin_netIntIps.add(self._lfrm_netAdaps, weight=1)
         #
-        self._adapsvw = NetAdapView(
+        self._adapsvw = NetAdapsView(
             self._lfrm_netAdaps,
             self._readDnsInfo,
             self._showInfoWin,
@@ -429,38 +429,54 @@ class DnsWin(tk.Tk):
             adapIdx = self._acbag.indexAdap(newAdap)
         except IndexError:
             logging.info(
-                ('change in the following NetAdap that did not loaded into'
-                ' the app.\n%s'),
+                '%s was changed while has not loaded into the bag.',
+                newAdap,)
+            return
+        except ValueError:
+            logging.error(
+                '%s was changed while has contradictory peer in the bag.',
                 newAdap,)
             return
         curAdap: NetAdap = self._acbag[adapIdx] # type: ignore
         changed = curAdap.update(newAdap)
         if not changed:
-            print(f'no important change in {repr(newAdap)}')
+            print(f'no important change in {repr(curAdap)}')
             return
+        # Updating the NetAdapsView...
+        self._adapsvw.changeAdap(curAdap, adapIdx)
         #
-        print(f'{newAdap} changed')
-        self._adapsvw.changeAdap(newAdap, adapIdx)
+        self._refreshInfoWin(adapIdx)
     
     def _onNetAdapCreated(self, _: tk.Event) -> None:
-        pass
+        newAdap = self._qAdapChange.get()
+        try:
+            self._acbag.indexAdap(newAdap)
+            logging.error(
+                '%s was ceated while has already loaded into the bag.',
+                newAdap,)
+            return
+        except ValueError:
+            logging.error(
+                '%s was changed while has a contradictory peer in the bag.',
+                newAdap,)
+            return
+        except IndexError:
+            pass
+        self._acbag.addAdap(newAdap)
+        adapIdx = self._acbag.indexAdap(newAdap)
+        self._adapsvw.addAdap(newAdap, adapIdx)
 
     def _onNetAdapDeleted(self, _: tk.Event) -> None:
         delAdap = self._qAdapDeletion.get()
         try:
             adapIdx = self._acbag.indexAdap(delAdap)
-        except IndexError:
+        except (IndexError, ValueError):
             logging.info(
-                '%s was deleted does and has not loaded into the App.',
+                '%s was deleted while has not loaded into the bag.',
                 delAdap,)
             return
         # Closing its info win if any...
-        try:
-            infoWin = self._infoWins[adapIdx]
-        except KeyError:
-            pass
-        else:
-            infoWin.closeWin()
+        self._closeInfoWin(adapIdx)
         #
         vwIdx = self._adapsvw.getSelectedIdx()
         if vwIdx is not None and vwIdx.getAdap() == adapIdx:
@@ -484,13 +500,8 @@ class DnsWin(tk.Tk):
             logging.info(f'no important change in {repr(newConfig)}')
             return
         # Updaing its info win if any...
-        try:
-            infoWin = self._infoWins[configIdx]
-        except KeyError:
-            pass
-        else:
-            infoWin.populateInfo()
-        # Updating adaps view...
+        self._refreshInfoWin(configIdx)
+        # Updating the adaps view...
         self._adapsvw.changeConfig(newConfig, configIdx)
         adapIdx = configIdx.getAdap()
         adap: NetAdap = self._acbag[adapIdx] # type: ignore
@@ -502,7 +513,29 @@ class DnsWin(tk.Tk):
             self._ipsvw.populate(newConfig, self._mpNameDns.values())
     
     def _onNetConfigCreated(self, _: tk.Event) -> None:
-        pass
+        newConfig = self._qConfigCreation.get()
+        try:
+            self._acbag.indexConfig(newConfig)
+            logging.error(
+                '%s was ceated while has already loaded into the bag.',
+                newConfig,)
+            return
+        except ValueError:
+            logging.error(
+                '%s was changed while has a contradictory peer in the bag.',
+                newConfig,)
+            return
+        except IndexError:
+            pass
+        # Adding config to the bag...
+        try:
+            self._acbag.addConfig(newConfig)
+        except ValueError:
+            # No corresonding adapter, returning...
+            return
+        # Adding to the AdapsView...
+        configIdx = self._acbag.indexConfig(newConfig)
+        self._adapsvw.addConfig(newConfig, configIdx)
 
     def _onNetConfigDeleted(self, _: tk.Event) -> None:
         delConfig = self._qConfigChange.get()
@@ -524,15 +557,13 @@ class DnsWin(tk.Tk):
             infoWin.closeWin()
         # Updating IpsView...
         vwIdx = self._getNetItemIdx()
-        adapIdx = configIdx.getAdap()
         if vwIdx is not None:
             if vwIdx == configIdx:
                 self._ipsvw.clear()
-            elif vwIdx == adapIdx:
+            elif vwIdx == configIdx.getAdap():
                 self._ipsvw.populate(
-                    self._acbag[adapIdx], # type: ignore
-                    self._mpNameDns.values(),
-                    configIdx.cfgIdx,)
+                    self._acbag[vwIdx],
+                    self._mpNameDns.values(),)
         #
         self._adapsvw.delIdx(configIdx)
     
@@ -619,9 +650,16 @@ class DnsWin(tk.Tk):
             return
         return idx
     
-    def _showInfoWin(self) -> None:
-        idx = self._getNetItemIdx()
+    def _showInfoWin(self, idx: ACIdx | None = None) -> None:
+        # Getting selected item in the NetAdapsView...
         if idx is None:
+            idx = self._getNetItemIdx()
+            if idx is None:
+                return
+        # 
+        if idx in self._infoWins:
+            self._infoWins[idx].focus_set()
+            self._infoWins[idx].grab_set()
             return
         #
         infoWin = NetItemInfoWin(
@@ -636,6 +674,22 @@ class DnsWin(tk.Tk):
             value_width=self._settings.nid_value_width,)
         self._infoWins[idx] = infoWin
         infoWin.showWin()
+    
+    def _closeInfoWin(self, idx: ACIdx) -> None:
+        try:
+            infoWin = self._infoWins[idx]
+        except KeyError:
+            pass
+        else:
+            infoWin.closeWin()
+    
+    def _refreshInfoWin(self, idx: ACIdx) -> None:
+        try:
+            infoWin = self._infoWins[idx]
+        except KeyError:
+            pass
+        else:
+            infoWin.populateInfo()
     
     def _onInfoWinClosed(self, idx: ACIdx) -> None:
         try:

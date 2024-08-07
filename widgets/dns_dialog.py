@@ -109,7 +109,6 @@ class DnsDialog(tk.Toplevel):
         super().__init__(master)
         self.title(_('ENTER_DNS'))
         self.resizable(False, False)
-        self.grab_set()
         # Defining variables...
         from utils.funcs import ipToStr
         # Defning variables...
@@ -524,5 +523,7 @@ class DnsDialog(tk.Toplevel):
         or `None` on cancelation.
         """
         self.wm_deiconify()
+        self.grab_set()
+        self._entry_name.focus_set()
         self.wait_window()
         return self._result
