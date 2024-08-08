@@ -125,8 +125,7 @@ class NetItemInfoWin(tk.Toplevel):
                 'Cannot get the geometry of the NetItemInfoWin.',
                 stack_info=True)
         if self._cbClose:
-            self.after(100, self._cbClose, self._idx)
-            #self._cbClose(self._idx)
+            self._cbClose(self._idx)
         self.destroy()
     
     def _clear(self) -> None:
@@ -143,11 +142,11 @@ class NetItemInfoWin(tk.Toplevel):
     
     def showWin(self) -> None:
         """Shows the window."""
-        self.grab_set()
-        self.mainloop()
+        pass
     
     def showDialog(self) -> None:
         """Shows the window as dialog box."""
         self.grab_set()
+        self.focus_set()
         self.wm_deiconify()
         self.wait_window()

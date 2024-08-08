@@ -127,10 +127,11 @@ class AdapCfgBag:
             self,
             config: NetConfig,
             ) -> ACIdx:
-        """Searches for a network adapter configuration in a bag of
-        network adapters and configurations. It raises:
-        * `IndexError`: if not found.
-        * `ValueError`: there is a contradictory peer.
+        """Searches for a specified config in the bag. It raises:
+        * `IndexError`: there is no config with the same identity (the
+        same determinant attributes).
+        * `ValueError`: there is a contradictory peer (the same index
+        but not completely equal determinant attributes).
         """
         for adap in self._adaps.values():
             if config.Index in adap._configs:
@@ -170,9 +171,9 @@ class AdapCfgBag:
     def addConfig(self, config: NetConfig) -> None:
         """Adds a config to the bag.
         #### Excepitons:
-        * `IndexError`: the config index already exists in the 
-        corresponding adapter.
         * `ValueError`: no corresponding adapter found
+        * `IndexError`: a config with the same index already exists in the 
+        corresponding adapter.
         """
         for adap in self._adaps.values():
             if adap._Caption == config._Caption:

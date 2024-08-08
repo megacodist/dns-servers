@@ -22,10 +22,10 @@ from db import DnsServer, IDatabase
 from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
 from utils.async_ops import AsyncOpManager
 from utils.keyboard import KeyCodes, Modifiers
-from utils.net_int_monitor import NetItemMonitor
+from utils.net_item_monitor import NetItemMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
-from widgets.net_int_dialog import NetItemInfoWin
+from widgets.net_item_info_win import NetItemInfoWin
 
 
 if TYPE_CHECKING:
@@ -199,7 +199,7 @@ class DnsWin(tk.Tk):
         #
         self._adapsvw = NetAdapsView(
             self._lfrm_netAdaps,
-            self._readDnsInfo,
+            self._showDnsIps,
             self._showInfoWin,
             gntwrk_img=self._IMG_GNTWRK,
             rntwrk_img=self._IMG_RNTWRK,
@@ -376,16 +376,17 @@ class DnsWin(tk.Tk):
         # Cleaning up...
         self._asyncMngr.close()
         try:
-            self._netItemThrd.cancel()
+            self._netItemThrd.close()
         except AttributeError:
             pass
-        else:
-            self._netItemThrd.join()
         # Closing open NetItemInfoWin windows...
         lsInfoWins = list(self._infoWins.values())
         for netWin in lsInfoWins[:-1]:
             netWin.destroy()
-        lsInfoWins[-1].closeWin()
+        try:
+            lsInfoWins[-1].closeWin()
+        except IndexError:
+            pass
         self._grabInoWinSettings(lsInfoWins[-1])
         # Destroying the window...
         self.destroy()
@@ -425,6 +426,7 @@ class DnsWin(tk.Tk):
     
     def _onNetAdapChanged(self, _: tk.Event) -> None:
         newAdap = self._qAdapChange.get()
+        logging.debug(f'changed adap: {newAdap}')
         try:
             adapIdx = self._acbag.indexAdap(newAdap)
         except IndexError:
@@ -440,7 +442,7 @@ class DnsWin(tk.Tk):
         curAdap: NetAdap = self._acbag[adapIdx] # type: ignore
         changed = curAdap.update(newAdap)
         if not changed:
-            print(f'no important change in {repr(curAdap)}')
+            logging.debug(f'no important change in {repr(curAdap)}')
             return
         # Updating the NetAdapsView...
         self._adapsvw.changeAdap(curAdap, adapIdx)
@@ -449,6 +451,7 @@ class DnsWin(tk.Tk):
     
     def _onNetAdapCreated(self, _: tk.Event) -> None:
         newAdap = self._qAdapChange.get()
+        logging.debug(f'created adap: {newAdap}')
         try:
             self._acbag.indexAdap(newAdap)
             logging.error(
@@ -468,6 +471,7 @@ class DnsWin(tk.Tk):
 
     def _onNetAdapDeleted(self, _: tk.Event) -> None:
         delAdap = self._qAdapDeletion.get()
+        logging.debug(f'deleted adap: {delAdap}')
         try:
             adapIdx = self._acbag.indexAdap(delAdap)
         except (IndexError, ValueError):
@@ -486,6 +490,7 @@ class DnsWin(tk.Tk):
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         newConfig = self._qConfigChange.get()
+        logging.debug(f'changed config: {newConfig}')
         try:
             configIdx = self._acbag.indexConfig(newConfig)
         except IndexError:
@@ -514,6 +519,7 @@ class DnsWin(tk.Tk):
     
     def _onNetConfigCreated(self, _: tk.Event) -> None:
         newConfig = self._qConfigCreation.get()
+        logging.debug(f'created config: {newConfig}')
         try:
             self._acbag.indexConfig(newConfig)
             logging.error(
@@ -531,14 +537,21 @@ class DnsWin(tk.Tk):
         try:
             self._acbag.addConfig(newConfig)
         except ValueError:
-            # No corresonding adapter, returning...
+            # No corresonding adapter, so none of interest, returning...
             return
         # Adding to the AdapsView...
         configIdx = self._acbag.indexConfig(newConfig)
         self._adapsvw.addConfig(newConfig, configIdx)
+        # Updating the IpsView...
+        vwIdx = self._getNetItemIdx()
+        if vwIdx is not None and vwIdx == configIdx.getAdap():
+            self._ipsvw.populate(
+                self._acbag[vwIdx],
+                self._mpNameDns.values())
 
     def _onNetConfigDeleted(self, _: tk.Event) -> None:
-        delConfig = self._qConfigChange.get()
+        delConfig = self._qConfigDeletion.get()
+        logging.debug(f'deleted config: {delConfig}')
         try:
             configIdx = self._acbag.indexConfig(delConfig)
         except IndexError:
@@ -546,16 +559,16 @@ class DnsWin(tk.Tk):
                 '%s was deleted does and has not loaded into the App.',
                 delConfig,)
             return
+        except ValueError:
+            logging.error(
+                '%s was changed while has a contradictory peer in the bag.',
+                delConfig,)
+            return
         # Removing from the bag...
         self._acbag.delIdx(configIdx)
         # Closing its info win if any...
-        try:
-            infoWin = self._infoWins[configIdx]
-        except KeyError:
-            pass
-        else:
-            infoWin.closeWin()
-        # Updating IpsView...
+        self._closeInfoWin(configIdx)
+        # Updating the IpsView...
         vwIdx = self._getNetItemIdx()
         if vwIdx is not None:
             if vwIdx == configIdx:
@@ -564,7 +577,7 @@ class DnsWin(tk.Tk):
                 self._ipsvw.populate(
                     self._acbag[vwIdx],
                     self._mpNameDns.values(),)
-        #
+        # Removing from the AdapsView...
         self._adapsvw.delIdx(configIdx)
     
     def _initViews(self) -> None:
@@ -572,7 +585,7 @@ class DnsWin(tk.Tk):
         self._readNetAdaps()
         self._readDnses()
     
-    def _readDnsInfo(self, idx: ACIdx | None) -> None:
+    def _showDnsIps(self, idx: ACIdx | None) -> None:
         if idx is None:
             self._lfrm_ips.config(text='')
             self._ipsvw.clear()
@@ -580,10 +593,10 @@ class DnsWin(tk.Tk):
         adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
         self._lfrm_ips.config(
             text=adap.NetConnectionID)
+        netItem = self._acbag[idx]
         self._ipsvw.populate(
-            adap,
-            self._mpNameDns.values(),
-            idx.cfgIdx)
+            netItem,
+            self._mpNameDns.values(),)
 
     def _readNetAdaps(self) -> None:
         """Reads network interfaces."""
@@ -659,7 +672,7 @@ class DnsWin(tk.Tk):
         # 
         if idx in self._infoWins:
             self._infoWins[idx].focus_set()
-            self._infoWins[idx].grab_set()
+            #self._infoWins[idx].grab_set()
             return
         #
         infoWin = NetItemInfoWin(
@@ -723,7 +736,7 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('SETTING_DNS')),
                 type_=MessageType.INFO)
         else:
-            self._readDnsInfo(self._adapsvw.getSelectedIdx())
+            self._showDnsIps(self._adapsvw.getSelectedIdx())
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
