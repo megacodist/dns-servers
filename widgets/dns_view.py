@@ -120,19 +120,26 @@ class Dnsview(tksheet.Sheet):
         self.delete_row(rowIdx)
         del self._mpNameRow[dns_name]
     
-    def getIps(self) -> list[IPv4 | IPv6]:
+    def getSelectedIps(self) -> tuple[IPv4 | IPv6, ...]:
         """Returns a list of all selected IPs in the view. Raises
-        `ValueError` if at least one name cell is selected individually.
+        `ValueError` if at least one name cell is selected individually not
+        as a wholly-selected row.
         """
         rows = self.get_selected_rows()
         cells = self.get_selected_cells()
-        from pprint import pprint
         ips = list[IPv4 | IPv6]()
         for cell in cells:
             if cell[1] == 0:
                 if cell[1] in rows:
                     continue
                 else:
-                    raise ValueError()
+                    raise ValueError(
+                        'there is at least one individually-selected name'
+                        ' cell')
             ips.append(self.get_cell_data(*cell)) # type: ignore
-        return ips
+        for row in rows:
+            ips.extend(
+                ip
+                for ip in self.get_row_data(row)[1:] # type: ignore
+                if ip is not None)
+        return tuple(ips)

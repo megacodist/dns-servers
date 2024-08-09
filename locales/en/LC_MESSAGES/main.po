@@ -155,11 +155,11 @@ msgstr "Cannot set DNS servers to '{}'"
 msgid "X_CANCELED"
 msgstr "{} was canceled"
 
-msgid "READ_INTERFACES"
-msgstr "Read network interfaces"
+msgid "READ_ADAPS"
+msgstr "Read network adapters"
 
-msgid "READING_INTERFACES"
-msgstr "Reading network interfaces"
+msgid "READING_ADAPS"
+msgstr "Reading network adapters"
 
 msgid "READ_DNSES"
 msgstr "Read DNS servers"
@@ -179,8 +179,14 @@ msgstr "Enter a DNS server"
 msgid "SELECT_ONE_ITEM_DNS_VIEW"
 msgstr "Select one and only one row in the DNS servers."
 
-msgid "SELECT_ITEM_INTER_VIEW"
-msgstr "Select an item in the Interfaces list."
+msgid "SELECT_ONLY_IPS"
+msgstr "Select IPs individually or entire rows."
+
+msgid "SELECT_ITEM_ADAPS_VIEW"
+msgstr "Select an item in the Network Adapters list."
+
+msgid "NO_IP_SELECTED"
+msgstr "No IP is selected."
 
 msgid "EMPTY_DNS_NAME"
 msgstr "DNS name cannot be empty."
@@ -214,3 +220,6 @@ msgstr "This network adapter resolves URLs through DHCP."
 
 msgid "NO_DHCP_NO_DNS"
 msgstr "This network adapter has neither static DNS servers nor DHCP access."
+
+msgid "SETTING_IPS_FAILED"
+msgstr "Setting IPs failed: {}"

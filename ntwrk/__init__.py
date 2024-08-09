@@ -135,7 +135,7 @@ class AdapCfgBag:
         """
         for adap in self._adaps.values():
             if config.Index in adap._configs:
-                if config.equalIdentityTo(self._adaps[config.Index]):
+                if config.equalIdentityTo(adap._configs[config.Index]):
                     return ACIdx(adap.Index, config.Index)
                 else:
                     raise ValueError('a contradictory peer found')
@@ -849,10 +849,14 @@ class NetConfig(AbsNetItem):
             ips: Iterable[IPv4 | IPv6],
             ) -> NetConfigCode:
         import wmi
+        import pythoncom
+        pythoncom.CoInitialize()
         wmi_ = wmi.WMI()
         configs = wmi_.Win32_NetworkAdapterConfiguration(Index=self._Index)
-        code: tuple[int] = configs[0].SetDNSServerSearchOrder(
-            [str(ip) for ip in ips])
+        sIps = [str(ip) for ip in ips]
+        logging.debug(sIps)
+        code: tuple[int] = configs[0].SetDNSServerSearchOrder(sIps)
+        pythoncom.CoUninitialize()
         return NetConfigCode(code[0])
 
 

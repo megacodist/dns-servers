@@ -34,7 +34,7 @@ def mergeMsgs(braced: str, embed: str) -> str:
 def readNetAdaps(q: Queue[str] | None) -> AdapCfgBag:
     """Reads all network interfaces. Raises `TypeError` upon any failure."""
     if q:
-        q.put(_('READING_INTERFACES'))
+        q.put(_('READING_ADAPS'))
     return NetAdap.anumWinNetAdaps()
 
 

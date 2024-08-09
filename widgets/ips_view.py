@@ -477,5 +477,8 @@ class IpsView(ttk.Frame):
             return
         self._mpCrLbl[_CR(0, idx + 1)].config(background=self._defaultClr)
 
-    def getSelection(self) -> tuple[int, ...]:
+    def getSelectedIndicies(self) -> tuple[int, ...]:
         return tuple(self._selection)
+    
+    def getSelectedIps(self) -> tuple[IPv4 | IPv6, ...]:
+        return tuple([self._ips[idx] for idx in self.getSelectedIndicies()])

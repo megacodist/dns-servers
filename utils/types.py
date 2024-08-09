@@ -105,8 +105,6 @@ class GifImage:
     
     def close(self) -> None:
         """Releases the GIF file."""
-        self._frames.clear()
-        del self._frames
         self._HGIF_WAIT.close()
         del self._HGIF_WAIT
     
@@ -117,9 +115,6 @@ class GifImage:
         if hasattr(self, '_frames'):
             self._frames.clear()
             del self._frames
-        if hasattr(self, '_HGIF_WAIT'):
-            self._HGIF_WAIT.close()
-            del self._HGIF_WAIT
 
 
 class InvalidFileError(Exception):

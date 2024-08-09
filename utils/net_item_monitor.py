@@ -104,7 +104,7 @@ def _watchAdapChange(
                     '<<NetAdapChanged>>',
                     when='tail',)
             except TypeError:
-                logging.debug('failed to catch NetAdap change')
+                logging.debug('the WMI object is inconsistent with NetAdap')
         except wmi.x_wmi_timed_out:
             logging.debug('Timeout waiting for event')
         except wmi.x_wmi as err:
@@ -136,7 +136,7 @@ def _watchAdapCreation(
                     '<<NetAdapCreated>>',
                     when='tail',)
             except TypeError:
-                logging.debug('failed to catch NetAdap change')
+                logging.debug('the WMI object is inconsistent with NetAdap')
         except wmi.x_wmi_timed_out:
             logging.debug('Timeout waiting for event')
         except wmi.x_wmi as err:
@@ -168,7 +168,7 @@ def _watchAdapDeletion(
                     '<<NetAdapDeleted>>',
                     when='tail',)
             except TypeError:
-                logging.debug('failed to catch NetAdap change')
+                logging.debug('the WMI object is inconsistent with NetAdap')
         except wmi.x_wmi_timed_out:
             logging.debug('Timeout waiting for event')
         except wmi.x_wmi as err:
@@ -178,7 +178,7 @@ def _watchAdapDeletion(
 
 def _watchConfigChange(
         app_tk: tk.Tk,
-        q: Queue[NetAdap],
+        q: Queue[NetConfig],
         cancel: Event,
         ) -> None:
     pythoncom.CoInitialize()
@@ -195,12 +195,12 @@ def _watchConfigChange(
         try:
             event = watcher()
             try:
-                q.put(NetAdap(event.ole_object))
+                q.put(NetConfig(event.ole_object))
                 app_tk.event_generate(
                     '<<NetConfigChanged>>',
                     when='tail',)
             except TypeError:
-                logging.debug('failed to catch NetAdap change')
+                logging.debug('the WMI object is inconsistent with NetConfig')
         except wmi.x_wmi_timed_out:
             logging.debug('Timeout waiting for event')
         except wmi.x_wmi as err:
@@ -210,7 +210,7 @@ def _watchConfigChange(
 
 def _watchConfigCreation(
         app_tk: tk.Tk,
-        q: Queue[NetAdap],
+        q: Queue[NetConfig],
         cancel: Event,
         ) -> None:
     pythoncom.CoInitialize()
@@ -227,12 +227,12 @@ def _watchConfigCreation(
         try:
             event = watcher()
             try:
-                q.put(NetAdap(event.ole_object))
+                q.put(NetConfig(event.ole_object))
                 app_tk.event_generate(
                     '<<NetConfigCreated>>',
                     when='tail',)
             except TypeError:
-                logging.debug('failed to catch NetAdap change')
+                logging.debug('the WMI object is inconsistent with NetConfig')
         except wmi.x_wmi_timed_out:
             logging.debug('Timeout waiting for event')
         except wmi.x_wmi as err:
@@ -242,7 +242,7 @@ def _watchConfigCreation(
 
 def _watchConfigDeletion(
         app_tk: tk.Tk,
-        q: Queue[NetAdap],
+        q: Queue[NetConfig],
         cancel: Event,
         ) -> None:
     pythoncom.CoInitialize()
@@ -259,12 +259,12 @@ def _watchConfigDeletion(
         try:
             event = watcher()
             try:
-                q.put(NetAdap(event.ole_object))
+                q.put(NetConfig(event.ole_object))
                 app_tk.event_generate(
                     '<<NetConfigDeleted>>',
                     when='tail',)
             except TypeError:
-                logging.debug('failed to catch NetAdap change')
+                logging.debug('the WMI object is inconsistent with NetConfig')
         except wmi.x_wmi_timed_out:
             logging.debug('Timeout waiting for event')
         except wmi.x_wmi as err:

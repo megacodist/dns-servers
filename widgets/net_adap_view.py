@@ -112,6 +112,7 @@ class NetAdapsView(tk.Frame):
         self._mpIdxIid.clear()
         for child in self._trvw.get_children(''):
             self._trvw.delete(child)
+        self.event_generate('<<TreeviewSelect>>')
     
     def populate(self, bag: AdapCfgBag) -> None:
         self.clear()

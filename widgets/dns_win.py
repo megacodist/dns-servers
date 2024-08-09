@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from queue import Queue
 import tkinter as tk
-from tkinter import ttk
+from tkinter import NO, ttk
 from typing import Callable, TYPE_CHECKING
 
 import PIL.Image
@@ -199,7 +199,7 @@ class DnsWin(tk.Tk):
         #
         self._adapsvw = NetAdapsView(
             self._lfrm_netAdaps,
-            self._showDnsIps,
+            self._onNetItemIdxChanged,
             self._showInfoWin,
             gntwrk_img=self._IMG_GNTWRK,
             rntwrk_img=self._IMG_RNTWRK,
@@ -216,17 +216,19 @@ class DnsWin(tk.Tk):
         #
         self._btn_addIps = ttk.Button(
             self._frm_ipsTlbr,
+            command=self._addDnsSearchOrder,
             image=self._IMG_ADD) # type: ignore
         self._btn_addIps.pack(side=tk.LEFT)
         #
         self._btn_deletIps = ttk.Button(
             self._frm_ipsTlbr,
+            command=self._delDnsSearchOrder,
             image=self._IMG_REMOVE) # type: ignore
         self._btn_deletIps.pack(side=tk.LEFT)
         #
         self._btn_setIps = ttk.Button(
             self._frm_ipsTlbr,
-            command=self._setIps,
+            command=self._setDnsSearchOrder,
             image=self._IMG_ARROW) # type: ignore
         self._btn_setIps.pack(side=tk.LEFT)
         #
@@ -324,7 +326,7 @@ class DnsWin(tk.Tk):
             label=_('NET_ADAPS'),
             menu=self._menu_netAdaps)
         self._menu_netAdaps.add_cascade(
-            label=_('READ_INTERFACES'),
+            label=_('READ_ADAPS'),
             command=self._readNetAdaps)
         self._menu_netAdaps.add_cascade(
             label=_('SHOW_NET_INT_INFO'),
@@ -379,15 +381,8 @@ class DnsWin(tk.Tk):
             self._netItemThrd.close()
         except AttributeError:
             pass
-        # Closing open NetItemInfoWin windows...
-        lsInfoWins = list(self._infoWins.values())
-        for netWin in lsInfoWins[:-1]:
-            netWin.destroy()
-        try:
-            lsInfoWins[-1].closeWin()
-        except IndexError:
-            pass
-        self._grabInoWinSettings(lsInfoWins[-1])
+        # Closing all open NetItemInfoWin windows...
+        self._closeAllInfoWins()
         # Destroying the window...
         self.destroy()
     
@@ -426,7 +421,6 @@ class DnsWin(tk.Tk):
     
     def _onNetAdapChanged(self, _: tk.Event) -> None:
         newAdap = self._qAdapChange.get()
-        logging.debug(f'changed adap: {newAdap}')
         try:
             adapIdx = self._acbag.indexAdap(newAdap)
         except IndexError:
@@ -442,7 +436,6 @@ class DnsWin(tk.Tk):
         curAdap: NetAdap = self._acbag[adapIdx] # type: ignore
         changed = curAdap.update(newAdap)
         if not changed:
-            logging.debug(f'no important change in {repr(curAdap)}')
             return
         # Updating the NetAdapsView...
         self._adapsvw.changeAdap(curAdap, adapIdx)
@@ -450,8 +443,7 @@ class DnsWin(tk.Tk):
         self._refreshInfoWin(adapIdx)
     
     def _onNetAdapCreated(self, _: tk.Event) -> None:
-        newAdap = self._qAdapChange.get()
-        logging.debug(f'created adap: {newAdap}')
+        newAdap = self._qAdapCreation.get()
         try:
             self._acbag.indexAdap(newAdap)
             logging.error(
@@ -471,7 +463,6 @@ class DnsWin(tk.Tk):
 
     def _onNetAdapDeleted(self, _: tk.Event) -> None:
         delAdap = self._qAdapDeletion.get()
-        logging.debug(f'deleted adap: {delAdap}')
         try:
             adapIdx = self._acbag.indexAdap(delAdap)
         except (IndexError, ValueError):
@@ -490,7 +481,6 @@ class DnsWin(tk.Tk):
     
     def _onNetConfigChanged(self, _: tk.Event) -> None:
         newConfig = self._qConfigChange.get()
-        logging.debug(f'changed config: {newConfig}')
         try:
             configIdx = self._acbag.indexConfig(newConfig)
         except IndexError:
@@ -502,7 +492,6 @@ class DnsWin(tk.Tk):
         # Updating `_acbag`...`
         changed = curConfig.update(newConfig)
         if not changed:
-            logging.info(f'no important change in {repr(newConfig)}')
             return
         # Updaing its info win if any...
         self._refreshInfoWin(configIdx)
@@ -519,7 +508,6 @@ class DnsWin(tk.Tk):
     
     def _onNetConfigCreated(self, _: tk.Event) -> None:
         newConfig = self._qConfigCreation.get()
-        logging.debug(f'created config: {newConfig}')
         try:
             self._acbag.indexConfig(newConfig)
             logging.error(
@@ -551,7 +539,6 @@ class DnsWin(tk.Tk):
 
     def _onNetConfigDeleted(self, _: tk.Event) -> None:
         delConfig = self._qConfigDeletion.get()
-        logging.debug(f'deleted config: {delConfig}')
         try:
             configIdx = self._acbag.indexConfig(delConfig)
         except IndexError:
@@ -585,10 +572,11 @@ class DnsWin(tk.Tk):
         self._readNetAdaps()
         self._readDnses()
     
-    def _showDnsIps(self, idx: ACIdx | None) -> None:
+    def _onNetItemIdxChanged(self, idx: ACIdx | None) -> None:
         if idx is None:
             self._lfrm_ips.config(text='')
             self._ipsvw.clear()
+            self._closeAllInfoWins()
             return
         adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
         self._lfrm_ips.config(
@@ -612,7 +600,7 @@ class DnsWin(tk.Tk):
             self._adapsvw.populate(self._acbag)
         except CancelledError:
             self._msgvw.AddMessage(
-                _('X_CANCELED').format(_('READING_INTERFACES')),
+                _('X_CANCELED').format(_('READING_ADAPS')),
                 type_=MessageType.INFO)
         else:
             # Running WMI monitoring thread...
@@ -658,7 +646,7 @@ class DnsWin(tk.Tk):
         idx = self._adapsvw.getSelectedIdx()
         if idx is None:
             self._msgvw.AddMessage(
-                _('SELECT_ITEM_INTER_VIEW'),
+                _('SELECT_ITEM_ADAPS_VIEW'),
                 type_=MessageType.WARNING)
             return
         return idx
@@ -695,6 +683,17 @@ class DnsWin(tk.Tk):
             pass
         else:
             infoWin.closeWin()
+    
+    def _closeAllInfoWins(self) -> None:
+        lsInfoWins = list(self._infoWins.values())
+        for netWin in lsInfoWins[:-1]:
+            netWin.destroy()
+        try:
+            lsInfoWins[-1].closeWin()
+        except IndexError:
+            pass
+        else:
+            self._grabInoWinSettings(lsInfoWins[-1])
     
     def _refreshInfoWin(self, idx: ACIdx) -> None:
         try:
@@ -736,7 +735,7 @@ class DnsWin(tk.Tk):
                 _('X_CANCELED').format(_('SETTING_DNS')),
                 type_=MessageType.INFO)
         else:
-            self._showDnsIps(self._adapsvw.getSelectedIdx())
+            self._onNetItemIdxChanged(self._adapsvw.getSelectedIdx())
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
@@ -805,21 +804,104 @@ class DnsWin(tk.Tk):
         self._dnsvw.changeDns(dnsOldName, newDns)
         self._db.updateDns(dnsOldName, newDns)
     
-    def _setIps(self) -> None:
-        # Reading network interface index...
-        netIntIdx = self._getNetItemIdx()
-        if netIntIdx is None:
-            return
+    def _getSelectedConfig(self) -> NetConfig | None:
+        """Gets the selected configuration in the Network Adapters view. If
+        no specific config is selected, it informs the user and returns
+        `None`.
+        """
+        idx = self._getNetItemIdx()
+        if idx is None:
+            return None
+        if idx.isAdap():
+            adap: NetAdap = self._acbag[idx] # type: ignore
+            nConfigs = len(adap._configs)
+            if nConfigs == 0:
+                self._msgvw.AddMessage(
+                    _('NO_ADAP_CONFIG'),
+                    type_=MessageType.ERROR)
+                return None
+            elif nConfigs > 1:
+                self._msgvw.AddMessage(
+                    _('MANY_ADAP_CONFIGS'),
+                    type_=MessageType.ERROR)
+                return None
+            return adap.Configs[0]
+        else:
+            return self._acbag[idx] # type: ignore
+    
+    def _getSelectedIps(self) -> tuple[IPv4 | IPv6, ...] | None:
+        """Gets the selected IPs in the DNS view. Upon any problem or
+        ambiguity, it informs the user and returns `None`.
+        """
         try:
-            ips = self._dnsvw.getIps()
+            ips = self._dnsvw.getSelectedIps()
         except ValueError:
             self._msgvw.AddMessage(
-                'Select IPs individually or entire rows.',
+                _('SELECT_ONLY_IPS'),
                 type_=MessageType.ERROR)
+            return None
+        if not ips:
+            self._msgvw.AddMessage(
+                _('NO_IP_SELECTED'),
+                type_=MessageType.ERROR)
+            return None
+        return ips
+    
+    def _setDnsSearchOrder(self) -> None:
+        # Getting the selected config...
+        config = self._getSelectedConfig()
+        if config is None:
             return
-        code = self._acbag[netIntIdx].setDnsSearchOrder(ips)
+        # Getting selected IPs...
+        ips = self._getSelectedIps()
+        if ips is None:
+            return
+        # Setting DNS search order...
+        code = config.setDnsSearchOrder(ips)
         if code != NetConfigCode.SUCCESSFUL:
-            self._msgvw.AddMessage(code.name)
+            if code.__doc__ is None:
+                msg = _('SETTING_IPS_FAILED').format(code.name)
+            else:
+                msg = _('SETTING_IPS_FAILED').format(code.__doc__)
+            self._msgvw.AddMessage(msg)
+    
+    def _addDnsSearchOrder(self) -> None:
+        """Adds selected IPs in the DNS view to the DNS search order of the
+        selected config in the Network Adapter view.
+        """
+        # Getting the selected config...
+        config = self._getSelectedConfig()
+        if config is None:
+            return
+        # Getting selected IPs...
+        newIps = self._getSelectedIps()
+        if newIps is None:
+            return
+        # Calculating IPs...
+        dnsIps = config.DNSServerSearchOrder
+        if dnsIps is not None:
+            dnsIps = list(dnsIps)
+            dnsIps.extend(set(newIps).difference(dnsIps))
+        else:
+            dnsIps = newIps
+        # Setting DNS search order...
+        code = config.setDnsSearchOrder(dnsIps)
+        if code != NetConfigCode.SUCCESSFUL:
+            if code.__doc__ is None:
+                msg = _('SETTING_IPS_FAILED').format(code.name)
+            else:
+                msg = _('SETTING_IPS_FAILED').format(code.__doc__)
+            self._msgvw.AddMessage(msg)
+    
+    def _delDnsSearchOrder(self) -> None:
+        """Removes selected IPs in the IPs view to the DNS search order of the
+        selected config in the Network Adapter view.
+        """
+        # Getting the selected config...
+        config = self._getSelectedConfig()
+        if config is None:
+            return
+        logging.debug(self._ipsvw.getSelectedIps())
     
     def _testUrl(self) -> None:
         # Reading network interface name...
