@@ -2,6 +2,7 @@
 # 
 #
 
+from dataclasses import dataclass
 import logging
 import tkinter as tk
 from tkinter import ttk
@@ -16,7 +17,8 @@ if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
 
 
-class NetIntDlgSettings(NamedTuple):
+@dataclass
+class NetItemWinSettings:
     x: int
     y: int
     width: int
@@ -67,7 +69,7 @@ class NetItemInfoWin(tk.Toplevel):
             'copy',)
         self._sheet.pack(fill=tk.BOTH, expand=True)
         #
-        self.settings = NetIntDlgSettings(
+        self.settings = NetItemWinSettings(
             0,
             0,
             width,
@@ -97,6 +99,8 @@ class NetItemInfoWin(tk.Toplevel):
         _, x, y = parent.winfo_geometry().split('+')
         x = int(x) + (parent.winfo_width() - self.winfo_width()) // 2
         y = int(y) + (parent.winfo_height() - self.winfo_height()) // 2
+        self.settings.x = x
+        self.settings.y = y
         self.geometry(f'+{x}+{y}')
     
     def closeWin(self) -> None:
@@ -113,7 +117,7 @@ class NetItemInfoWin(tk.Toplevel):
             re.VERBOSE)
         if match:
             colsWidths = self._sheet.get_column_widths()
-            self.settings = NetIntDlgSettings(
+            self.settings = NetItemWinSettings(
                 int(match.group('x')),
                 int(match.group('y')),
                 int(match.group('width')),

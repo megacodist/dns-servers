@@ -3,6 +3,7 @@
 #
 
 from concurrent.futures import CancelledError, Future
+from functools import partial
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from pathlib import Path
@@ -25,6 +26,7 @@ from utils.keyboard import KeyCodes, Modifiers
 from utils.net_item_monitor import NetItemMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
+from widgets.license_win import LicWinMixin
 from widgets.net_item_info_win import NetItemInfoWin
 
 
@@ -32,12 +34,14 @@ if TYPE_CHECKING:
     _: Callable[[str], str]
 
 
-class DnsWin(tk.Tk):
+class DnsWin(tk.Tk, LicWinMixin):
     def __init__(
             self,
             res_dir: Path,
+            lic_file: Path,
             settings: AppSettings,
-            db: IDatabase,) -> None:
+            db: IDatabase,
+            ) -> None:
         super().__init__(
             screenName=None,
             baseName=None,
@@ -48,6 +52,8 @@ class DnsWin(tk.Tk):
         self.title(_('APP_NAME'))
         self.geometry(f'{settings.win_width}x{settings.win_height}+'
             f'{settings.win_x}+{settings.win_y}')
+        #
+        LicWinMixin.__init__(self, lic_file, settings)
         #
         self._RES_DIR = res_dir
         """The directory of the resources."""
@@ -315,6 +321,9 @@ class DnsWin(tk.Tk):
         self._menubar.add_cascade(
             label=_('APP'),
             menu=self._menu_app)
+        self._menu_app.add_cascade(
+            label=_('LICENSE'),
+            command=self.showLicWin,)
         self._menu_app.add_cascade(
             label=_('QUIT'),
             command=self._onWinClosing)

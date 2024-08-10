@@ -20,7 +20,9 @@ def configureLogger(filename: PathLike) -> None:
     msgOnlyFormatter = logging.Formatter('%(message)s')
     detailedFormatter = logging.Formatter(
         fmt=(
-            '[%(asctime)s]  %(module)s  %(threadName)s'
+            'time="%(asctime)s", thread="%(threadName)s"'
+            + '\nLine no.=%(lineno)d, function="%(funcName)s", '
+            +'file="%(pathname)s"'
             + '\n%(levelname)8s: %(message)s\n\n'),
         datefmt='%Y-%m-%d  %H:%M:%S')
     fileHandler = logging.FileHandler(filename, 'a')

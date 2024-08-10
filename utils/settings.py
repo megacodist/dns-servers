@@ -29,3 +29,8 @@ class AppSettings(types_module.AppSettings):
     nid_height = 300
     nid_key_width = 150
     nid_value_width = 180
+    # License window settings...
+    licw_x = 200
+    licw_y = 150
+    licw_width = 400
+    licw_height = 300

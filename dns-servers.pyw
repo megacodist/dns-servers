@@ -49,7 +49,11 @@ def main() -> None:
     # Creating the window...
     from widgets.dns_win import DnsWin
     try:
-        dnsWin = DnsWin(_RES_DIR, _settings, db)
+        dnsWin = DnsWin(
+            _RES_DIR,
+            _APP_DIR / 'LICENSE',
+            _settings,
+            db,)
         dnsWin.mainloop()
     finally:
         db.close()
