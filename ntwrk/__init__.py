@@ -853,9 +853,9 @@ class NetConfig(AbsNetItem):
         pythoncom.CoInitialize()
         wmi_ = wmi.WMI()
         configs = wmi_.Win32_NetworkAdapterConfiguration(Index=self._Index)
-        sIps = [str(ip) for ip in ips]
-        logging.debug(sIps)
-        code: tuple[int] = configs[0].SetDNSServerSearchOrder(sIps)
+        ips_ = [ip.exploded for ip in ips]
+        logging.debug(ips)
+        code: tuple[int] = configs[0].SetDNSServerSearchOrder(ips_)
         pythoncom.CoUninitialize()
         return NetConfigCode(code[0])
 

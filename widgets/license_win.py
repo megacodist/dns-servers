@@ -2,7 +2,7 @@
 # 
 #
 
-from dataclasses import dataclass
+from __future__ import annotations
 import logging
 from os import fspath, PathLike
 import re
@@ -15,12 +15,72 @@ if TYPE_CHECKING:
     _: Callable[[str], str]
 
 
-@dataclass
-class _LicenseWinSettings:
-    x: int
-    y: int
-    width: int
-    height: int
+class _LicWinSettings:
+    @classmethod
+    def checkObj(cls, sett_obj: Any) -> bool:
+        """Checks whether the settings object has necessary attributes."""
+        return all([
+            hasattr(sett_obj, 'licw_x'),
+            isinstance(getattr(sett_obj, 'licw_x'), int),
+            hasattr(sett_obj, 'licw_y'),
+            isinstance(getattr(sett_obj, 'licw_y'), int),
+            hasattr(sett_obj, 'licw_width'),
+            isinstance(getattr(sett_obj, 'licw_width'), int),
+            hasattr(sett_obj, 'licw_height'),
+            isinstance(getattr(sett_obj, 'licw_height'), int),])
+
+    @classmethod
+    def fromObj(cls, sett_obj: Any) -> _LicWinSettings:
+        """Reads license window related settings from application settings
+        object. Raises `TypeError` upon any inconsistency.
+        """
+        try:
+            return _LicWinSettings(
+                sett_obj.licw_x,
+                sett_obj.licw_y,
+                sett_obj.licw_width,
+                sett_obj.licw_height)
+        except AttributeError as err:
+            raise TypeError(err.args)
+
+    def __init__(
+            self,
+            x: int,
+            y: int,
+            width: int,
+            height: int,
+            ) -> None:
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    
+    def save(self, sett_obj: Any) -> None:
+        """Saves this object to the provided settings object (`sett_obj`).
+        Raises `TypeError` upon any inconsistency.
+        """
+        origValues = dict[str, Any]()
+        try:
+            temp = sett_obj.licw_x
+            sett_obj.licw_x = self.x
+            origValues['licw_x'] = temp
+            temp = sett_obj.licw_y
+            sett_obj.licw_y = self.y
+            origValues['licw_y'] = temp
+            temp = sett_obj.licw_width
+            sett_obj.licw_width = self.width
+            origValues['licw_width'] = temp
+            temp = sett_obj.licw_height
+            sett_obj.licw_height = self.height
+            origValues['licw_height'] = temp
+        except (AttributeError, TypeError) as err:
+            # Rolling back modifications to the `_settings`...
+            for attr, value in origValues.items():
+                setattr(sett_obj, attr, value)
+            logging.error(
+                'failed to save settings of license window to the '
+                    'application settings object: %s',
+                err)
 
 
 class _LicenseWin(tk.Toplevel):
@@ -30,20 +90,13 @@ class _LicenseWin(tk.Toplevel):
             lic_file: str | PathLike,
             close_cb: Callable[[], None] | None = None,
             *,
-            xy: tuple[int, int] | None = None,
-            width: int = 400,
-            height: int = 350,
+            settings: _LicWinSettings | None = None,
             ) -> None:
         super().__init__(master)
         self.title(_('LICENSE'))
         self.resizable(True, True)
-        self.geometry(f'{width}x{height}')
         self._cbClose = close_cb
-        self.settings = _LicenseWinSettings(
-            0 if xy is None else xy[0],
-            0 if xy is None else xy[1],
-            width,
-            height,)
+        self.settings = settings
         # Initializing GUI...
         self._frm = ttk.Frame(self)
         self._frm.rowconfigure(0, weight=1)
@@ -78,30 +131,38 @@ class _LicenseWin(tk.Toplevel):
             column=0,
             sticky=tk.NSEW)
         #
+        self._szgrp = ttk.Sizegrip(self._frm)
+        self._szgrp.grid(
+            row=1,
+            column=1,
+            sticky=tk.NSEW,)
+        #
         with open(fspath(lic_file), 'rt') as lcnsStream:
             self._txt.insert(
                 tk.END,
                 '\n'.join(lcnsStream.readlines()))
         self._txt.config(state=tk.DISABLED)
         #
-        if xy is None:
-            self.after(10, self._centerDialog, master)
-        else:
-            self.geometry(f'+{xy[0]}+{xy[1]}')
+        self._setGeometry()
         # Binding events...
         self.protocol('WM_DELETE_WINDOW', self.closeWin)
+    
+    def _setGeometry(self) -> None:
+        if self.settings:
+            self.geometry(
+                f'{self.settings.width}x{self.settings.height}'
+                f'+{self.settings.x}+{self.settings.y}')
+        else:
+            self.geometry('400x300')
+            self.after(10, self._centerDialog, self.master)
     
     def _centerDialog(self, parent: tk.Misc) -> None:
         _, x, y = parent.winfo_geometry().split('+')
         x = int(x) + (parent.winfo_width() - self.winfo_width()) // 2
         y = int(y) + (parent.winfo_height() - self.winfo_height()) // 2
-        self.settings.x = x
-        self.settings.y = y
         self.geometry(f'+{x}+{y}')
 
     def closeWin(self) -> None:
-        settings = {}
-
         # Getting the geometry of the License Dialog (LD)...
         w_h_x_y = self.winfo_geometry()
         GEOMETRY_REGEX = r"""
@@ -114,10 +175,11 @@ class _LicenseWin(tk.Toplevel):
             w_h_x_y,
             re.VERBOSE)
         if match:
-            self.settings.width = int(match.group('width'))
-            self.settings.height = int(match.group('height'))
-            self.settings.x = int(match.group('x'))
-            self.settings.y = int(match.group('y'))
+            self.settings = _LicWinSettings(
+                int(match.group('x')),
+                int(match.group('y')),
+                int(match.group('width')),
+                int(match.group('height')),)
         else:
             logging.error('Cannot get the geometry of License Dialog.')
         #
@@ -127,6 +189,13 @@ class _LicenseWin(tk.Toplevel):
     
     def showWin(self) -> None:
         self.focus_set()
+    
+    def showDialog(self) -> None:
+        """Shows the window as dialog box."""
+        self.grab_set()
+        self.focus_set()
+        self.wm_deiconify()
+        self.wait_window()
 
 
 class LicWinMixin:
@@ -139,49 +208,42 @@ class LicWinMixin:
 
     `LicWinMixin.__init__(self, lic_file, settings)`
 
-    * `lic_file`: a `PathLike` object pointing to the license file
-    * `settings`: an object that must have `licw_x`, `licw_y`, `licw_width`,
-    and `licw_height` attributes.
+    * `lic_file`: a `PathLike` object pointing to the license file in the
+    file system.
+    * `settings_obj`: the optional application settings object that is
+    supposed to have `licw_x: int`, `licw_y: int`, `licw_width: int`, and
+    `licw_height: int` attributes.
+
+    #### API
+    In the derived class, the following methods will be available:
+    * `self.showLicWin()`
+    * `self.closeLicWin()`
     """
     def __init__(
             self,
             lic_file: PathLike,
-            settings: Any,
+            sett_obj: Any | None = None,
             ) -> None:
+        """* `lic_file`: a `PathLike` object pointing to the license file in the
+        file system.
+        * `settings_obj`: the optional application settings object that is
+        supposed to have `licw_x: int`, `licw_y: int`, `licw_width: int`, and
+        `licw_height: int` attributes.
+        """
         self._licWin: _LicenseWin | None = None
         self._LIC_FILE = lic_file
-        self._settings = settings
+        self._appSettings = sett_obj if sett_obj is not None and \
+            _LicWinSettings.checkObj(sett_obj) else None
 
     def showLicWin(self) -> None:
         if self._licWin is None:
-            try:
-                xy = (self._settings.licw_x, self._settings.licw_y)
-            except AttributeError as err:
-                xy = None
-                logging.error(
-                    'failed to read XY coordinates of license window: %s',
-                    err)
-            try:
-                width = self._settings.licw_width
-            except AttributeError as err:
-                width = 400
-                logging.error(
-                    'failed to read the width of license window: %s',
-                    err)
-            try:
-                height = self._settings.licw_height
-            except AttributeError as err:
-                height = 300
-                logging.error(
-                    'failed to read the height of license window: %s',
-                    err)
+            settings = _LicWinSettings.fromObj(self._appSettings) if \
+                self._appSettings is not None else None
             self._licWin = _LicenseWin(
                 self, # type: ignore
                 lic_file=self._LIC_FILE,
                 close_cb=self._onLicWinClosed,
-                xy=xy,
-                width=width,
-                height=height,)
+                settings=settings,)
         self._licWin.showWin()
     
     def closeLicWin(self) -> None:
@@ -192,27 +254,11 @@ class LicWinMixin:
             self._licWin.closeWin()
     
     def _onLicWinClosed(self) -> None:
-        origValues = dict[str, Any]()
-        licWinSettings = self._licWin.settings # type: ignore
         try:
-            origValues['licw_x'] = self._settings.licw_x
-            self._settings.licw_x = licWinSettings.x
-            origValues['licw_y'] = self._settings.licw_y
-            self._settings.licw_y = licWinSettings.y
-            origValues['licw_width'] = self._settings.licw_width
-            self._settings.licw_width = licWinSettings.width
-            origValues['licw_height'] = self._settings.licw_height
-            self._settings.licw_height = licWinSettings.height
-        except AttributeError as err:
-            # Rolling back modifications to the `_settings`...
-            try:
-                self._settings
-            except AttributeError:
-                pass
-            else:
-                for attr, value in origValues.items():
-                    setattr(self._settings, attr, value)
+            self._licWin.settings.save(self._appSettings) # type: ignore
+        except TypeError as err:
             logging.error(
-                'failed to save settings of license window: %s',
+                'failed to save license window settings to the aplication '
+                    'settings object: %s',
                 err)
         self._licWin = None

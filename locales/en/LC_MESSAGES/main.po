@@ -95,6 +95,9 @@ msgstr "unnamed"
 msgid "TIMEOUT"
 msgstr "Timeout"
 
+msgid "DHCP"
+msgstr "DHCP"
+
 msgid "LICENSE"
 msgstr "License"
 
@@ -149,8 +152,8 @@ msgstr "URL is invalid."
 msgid "NO_DNS_TO_TEST"
 msgstr "No URL to test the URL."
 
-msgid "UNABLE_SET_DNS"
-msgstr "Cannot set DNS servers to '{}'"
+msgid "UNABLE_CHANGE_IPS"
+msgstr "Cannot chnage DNS IPs"
 
 msgid "X_CANCELED"
 msgstr "{} was canceled"
@@ -168,7 +171,7 @@ msgid "READING_DNSES"
 msgstr "Reading DNS servers from the database"
 
 msgid "SETTING_DNS"
-msgstr "Setting DNS servers of '{}' to '{}'"
+msgstr "Setting DNS IPs..."
 
 msgid "CONSTRUCTING_DATA"
 msgstr "Constructing data structures"
@@ -184,6 +187,9 @@ msgstr "Select IPs individually or entire rows."
 
 msgid "SELECT_ITEM_ADAPS_VIEW"
 msgstr "Select an item in the Network Adapters list."
+
+msgid "SELECT_IPS_IN_IPSVW"
+msgstr "Select one or more IPs in the IPs view."
 
 msgid "NO_IP_SELECTED"
 msgstr "No IP is selected."

@@ -3,7 +3,6 @@
 #
 
 from concurrent.futures import CancelledError, Future
-from functools import partial
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from pathlib import Path
@@ -390,6 +389,8 @@ class DnsWin(tk.Tk, LicWinMixin):
             self._netItemThrd.close()
         except AttributeError:
             pass
+        # Closing License window...
+        self.closeLicWin()
         # Closing all open NetItemInfoWin windows...
         self._closeAllInfoWins()
         # Destroying the window...
@@ -736,16 +737,6 @@ class DnsWin(tk.Tk, LicWinMixin):
         self._settings.nid_key_width = nidSettings.key_width
         self._settings.nid_value_width = nidSettings.value_int
 
-    def _onDnsApplied(self, fut: Future[None]) -> None:
-        try:
-            fut.result()
-        except CancelledError:
-            self._msgvw.AddMessage(
-                _('X_CANCELED').format(_('SETTING_DNS')),
-                type_=MessageType.INFO)
-        else:
-            self._onNetItemIdxChanged(self._adapsvw.getSelectedIdx())
-
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
         dnsDialog = DnsDialog(self, self._mpNameDns, self._mpIpDns)
@@ -910,18 +901,28 @@ class DnsWin(tk.Tk, LicWinMixin):
         config = self._getSelectedConfig()
         if config is None:
             return
-        logging.debug(self._ipsvw.getSelectedIps())
+        #
+        delIps = self._ipsvw.getSelectedIps()
+        if not delIps:
+            self._msgvw.AddMessage(
+                _('SELECT_IPS_IN_IPSVW'),
+                type_=MessageType.ERROR)
+            return
+        #
+        ips = config.DNSServerSearchOrder
+        ips = list(filter((lambda ip: ip not in delIps), ips))
+        config.setDnsSearchOrder(ips)
     
     def _testUrl(self) -> None:
-        # Reading network interface name...
-        idx = self._getNetItemIdx()
-        if idx is None:
+        # Getting selected config...
+        config = self._getSelectedConfig()
+        if config is None:
             return
         #
         from widgets.url_dialog import UrlDialog
         dnsDialog = UrlDialog(
             self,
-            self._acbag[idx].NetConnectionID,
+            config,
             self._mpNameDns,
             self._IMG_GTICK,
             self._IMG_REDX,

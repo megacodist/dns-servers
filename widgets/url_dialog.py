@@ -2,15 +2,19 @@
 # 
 #
 
+from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
 from tkinter import ttk
-from typing import Callable, TYPE_CHECKING, Iterator
+from typing import Callable, TYPE_CHECKING, Iterable, Iterator
 from urllib.parse import ParseResult
 
 from db import DnsServer
+from ntwrk import NetConfig
 from utils.types import GifImage, TkImg
+
+type _Iid = str
 
 if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
@@ -45,9 +49,9 @@ class DnsTesterThrd(Thread):
     def __init__(
             self,
             url: str,
-            net_int: str,
-            inq: Queue[DnsServer],
-            outq: Queue[str | _Error | _HttpRes],
+            config: NetConfig,
+            ips_q: Queue[Iterable[IPv4 | IPv6]],
+            res_q: Queue[str | _Error | _HttpRes],
             ) -> None:
         super().__init__(
             group=None,
@@ -57,14 +61,14 @@ class DnsTesterThrd(Thread):
             kwargs=None,
             daemon=False)
         self._url = url
-        self._netIntName = net_int
-        """The name of the network interface which is using to test
-        DNS servers.
+        self._config = config
+        """The network adapter configuration which is using to test DNS
+        servers.
         """
-        self._inq = inq
-        self._outq = outq
+        self._qIps = ips_q
+        self._qRes = res_q
         self._cancel: Event | None = Event()
-        self._TIMNT_NEW_DNS = 0.1
+        self._TIMNT_WAIT = 0.1
         """The timeout waiting for new DNS server."""
     
     def run(self) -> None:
@@ -72,9 +76,8 @@ class DnsTesterThrd(Thread):
         from time import sleep, monotonic
         from urllib.error import HTTPError, URLError
         from urllib.request import Request, urlopen
-        from utils.funcs import setDns, readDnsInfo
         # Getting current DNS
-        currDns = readDnsInfo(None, self._netIntName)
+        origIps = self._config.DNSServerSearchOrder
         # Starting main loop...
         while True:
             # Checking cancel is requested...
@@ -83,24 +86,19 @@ class DnsTesterThrd(Thread):
                 break
             # Getting next DNS test...
             try:
-                dns = self._inq.get_nowait()
+                ips = self._qIps.get_nowait()
             except Empty:
-                sleep(self._TIMNT_NEW_DNS)
+                sleep(self._TIMNT_WAIT)
                 continue
             # Setting new DNS...
-            self._outq.put(_('SETTING_DNS').format(
-                self._netIntName, dns.name))
-            setDns(None, self._netIntName, dns)
-            readDns = readDnsInfo(None, self._netIntName)
-            try:
-                ipsEqual = dns.ipsToSet() == readDns.ipsToSet() # type: ignore
-            except (TypeError, AttributeError):
-                ipsEqual = False
-            if not ipsEqual:
-                self._outq.put(_Error(_('UNABLE_SET_DNS').format(dns.name)))
+            self._qRes.put(_('SETTING_DNS'))
+            self._config.setDnsSearchOrder(ips)
+            sleep(self._TIMNT_WAIT)
+            if ips != self._config.DNSServerSearchOrder:
+                self._qRes.put(_Error(_('UNABLE_CHANGE_IPS')))
                 continue
             # Checking accessibility of the URL through the newly-set DNS...
-            self._outq.put(_('ACCESSING_URL'))
+            self._qRes.put(_('ACCESSING_URL'))
             response = _HttpRes()
             startTime = monotonic()
             try:
@@ -124,9 +122,9 @@ class DnsTesterThrd(Thread):
                 urlObj.close()
             response.latency = finishTime - startTime
             # Sending back the result...
-            self._outq.put(response)
+            self._qRes.put(response)
         # Rolling back the DNS...
-        setDns(None, self._netIntName, currDns)
+        self._config.setDnsSearchOrder(origIps)
     
     def cancel(self) -> None:
         if self._cancel:
@@ -145,7 +143,7 @@ class UrlDialog(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
-            net_int: str,
+            config: NetConfig,
             mp_name_dns: dict[str, DnsServer],
             tick_img: TkImg,
             cross_img: TkImg,
@@ -157,14 +155,18 @@ class UrlDialog(tk.Toplevel):
         self.resizable(False, False)
         self.grab_set()
         #
-        self._netIntName = net_int
-        """The name of the network interface which is using to test
-        DNS servers.
+        self._config = config
+        """The network adapter configuration which is using to test DNS
+        servers.
         """
         self._result = None
         self._mpNameDns = mp_name_dns
-        self._mpNameRes = dict[str, _HttpRes]()
-        self._mpNameIid = dict[str, str]()
+        self._mpNameRes = dict[_Iid, _HttpRes]()
+        self._mpReqIssued = dict[_Iid, _Iid]()
+        """The mapping between requested iis and issued iids:
+
+        `redIid -> issuedIid`
+        """
         self._IMG_TICK = tick_img
         self._IMG_CROSS = cross_img
         self._IMG_ARROW = arrow_img
@@ -178,8 +180,8 @@ class UrlDialog(tk.Toplevel):
         self._invalidColor = '#ca482e'
         self._urlParts: ParseResult | None = None
         self._dnsTester: DnsTesterThrd | None = None
-        self._outq = Queue[DnsServer]()
-        self._inq = Queue[str | _Error | _HttpRes]()
+        self._qIps = Queue[Iterable[IPv4 | IPv6]]()
+        self._qRes = Queue[str | _Error | _HttpRes]()
         # Initializing the GUI...
         self._initGui()
         self._populateDnses()
@@ -309,14 +311,47 @@ class UrlDialog(tk.Toplevel):
             command=self._onCanceled)
         self._btn_cancel.pack(side=tk.RIGHT, padx=5, pady=5)
     
+    def _getIssuedIid(self, req_iid: _Iid) -> _Iid:
+        """Gets the issued iid of the requested iid."""
+        if req_iid is self._mpReqIssued:
+            return self._mpReqIssued[req_iid]
+        return req_iid
+    
+    def _iterChildIids(self) -> Iterator[_Iid]:
+        """Returns an iterator to iterate over all Ips in all DNSes."""
+        for parentIid in self._trvw.get_children(''):
+            for childIid in self._trvw.get_children(parentIid):
+                yield childIid
+    
     def _populateDnses(self) -> None:
-        for name in self._mpNameDns:
-            iid = self._trvw.insert(
+        reqIid = 'DHCP'
+        issuedIid = self._trvw.insert(
+            parent='',
+            index=tk.END,
+            iid=reqIid,
+            values=(_('DHCP'), '', '',),)
+        if reqIid != issuedIid:
+            self._mpReqIssued[reqIid] = issuedIid
+        for name, dns in self._mpNameDns.items():
+            reqIid = name
+            issuedIid = self._trvw.insert(
                 parent='',
                 index=tk.END,
-                image=self._IMG_ARROW, # type: ignore
-                values=(self._mpNameDns[name].name, '', ''))
-            self._mpNameIid[name] = iid
+                iid=reqIid,
+                open=True,
+                values=(name,),)
+            if reqIid != issuedIid:
+                self._mpReqIssued[reqIid] = issuedIid
+            parentIid = issuedIid
+            for idx, ip in enumerate(dns.toIpTuple()):
+                reqIid = f'{name}-{idx}'
+                issuedIid = self._trvw.insert(
+                    parent=parentIid,
+                    index=tk.END,
+                    iid=reqIid,
+                    values=(str(ip), '', '',),)
+                if reqIid != issuedIid:
+                    self._mpReqIssued[reqIid] = issuedIid
     
     def _validateUrl(self, url: str) -> bool:
         from utils.funcs import parseUrl
@@ -337,102 +372,118 @@ class UrlDialog(tk.Toplevel):
             showerror(message=_('INVALID_URL'))
             return
         #
-        namesIter = iter(self._mpNameDns)
-        try:
-            dnsName = next(namesIter)
-        except StopIteration:
-            showerror(message=_('NO_DNS_TO_TEST'))
-            return
-        else:
-            self._outq.put(self._mpNameDns[dnsName])
-        #
         self._btn_startOk.config(text=_('OK'))
         self._btn_startOk.config(state=tk.DISABLED)
         self._svar_url.set(urlunparse(self._urlParts))
         self._entry_url.config(state=tk.DISABLED)
         #
+        ipsIter = self._iterChildIids()
+        iid = self._getIssuedIid('DHCP')
+        self._qIps.put([])
+        #
         self._dnsTester = DnsTesterThrd(
             self._svar_url.get(),
-            self._netIntName,
-            self._outq,
-            self._inq)
+            self._config,
+            self._qIps,
+            self._qRes)
         self._dnsTester.start()
         self._afterId = self.after(
             self._TIMINT_AFTER,
-            self._processDnses,
-            dnsName,
-            namesIter)
+            self._pollResult,
+            iid,
+            ipsIter)
     
-    def _processDnses(self, dns_name: str, names_iter: Iterator[str]) -> None:
+    def _pollResult(
+            self,
+            curr_iid: _Iid,
+            iter_: Iterator[_Iid],
+            ) -> None:
         try:
-            res = self._inq.get_nowait()
+            res = self._qRes.get_nowait()
         except Empty:
-            self._updateWaitGif(dns_name)
-            nextDns = False
+            self._updateWaitGif(curr_iid)
+            nextIp = False
         else:
             if isinstance(res, str):
-                self._showDnsMsg(dns_name, res)
-                nextDns = False
+                self._showMsg(curr_iid, res)
+                self._updateWaitGif(curr_iid)
+                nextIp = False
             elif isinstance(res, _Error):
-                self._showDnsErr(dns_name, res)
-                nextDns = True
+                self._showMsg(curr_iid, res.msg)
+                self._showErrImg(curr_iid)
+                nextIp = True
             elif isinstance(res, _HttpRes):
-                self._mpNameRes[dns_name] = res
-                self._showDnsRes(dns_name, res)
-                nextDns = True
-        if nextDns: # type: ignore
-            try:
-                dns_name = next(names_iter)
-                self._outq.put(self._mpNameDns[dns_name])
-            except StopIteration:
-                # All testing finished...
-                return
-        # Scheduling next round...
-        self._afterId = self.after(
-            self._TIMINT_AFTER,
-            self._processDnses,
-            dns_name,
-            names_iter)
+                self._mpNameRes[curr_iid] = res
+                self._showRes(curr_iid, res)
+                nextIp = True
+        if nextIp: # type: ignore
+            self._afterId = self.after(
+                self._TIMINT_AFTER,
+                self._testNextIp,
+                iter_,)
+        else:
+            self._afterId = self.after(
+                self._TIMINT_AFTER,
+                self._pollResult,
+                curr_iid,
+                iter_,)
     
-    def _updateWaitGif(self, dns_name: str) -> None:
-        self._trvw.see(self._mpNameIid[dns_name])
+    def _testNextIp(self, child_iter: Iterator[_Iid]) -> None:
+        try:
+            curr_iid = next(child_iter)
+        except StopIteration:
+            pass
+        else:
+            self._afterId = self.after(
+                self._TIMINT_AFTER,
+                self._pollResult,
+                curr_iid,
+                child_iter,)
+    
+    def _updateWaitGif(self, iid: _Iid) -> None:
+        self._trvw.see(iid)
         self._trvw.item(
-            self._mpNameIid[dns_name],
+            iid,
             image=self._GIF_DWAIT.nextFrame()) # type: ignore
     
-    def _showDnsMsg(self, dns_name: str, msg: str) -> None:
-        self._trvw.see(self._mpNameIid[dns_name])
+    def _showErrImg(self, iid: _Iid) -> None:
         self._trvw.item(
-            self._mpNameIid[dns_name],
-            values=(dns_name, msg, ''))
-    
-    def _showDnsErr(self, dns_name: str, err: _Error) -> None:
-        self._trvw.see(self._mpNameIid[dns_name])
-        self._trvw.item(
-            self._mpNameIid[dns_name],
-            values=(dns_name, err.msg, ''))
-        self._trvw.item(
-            self._mpNameIid[dns_name],
+            iid,
             image=self._IMG_CROSS) # type: ignore
-    
-    def _showDnsRes(self, dns_name: str, res: _HttpRes) -> None:
-        from utils.funcs import floatToEngineering as flToEngin
-        self._trvw.see(self._mpNameIid[dns_name])
+
+    def _showOkImg(self, iid: _Iid) -> None:
         self._trvw.item(
-            self._mpNameIid[dns_name],
-            values=(
-                dns_name,
-                self._getDescr(dns_name),
-                flToEngin(self._mpNameRes[dns_name].latency, True) + 's'))
-        if self._mpNameRes[dns_name].code and self._mpNameRes[
-                dns_name].code // 100 == 2: # type: ignore
-            self._trvw.item(self._mpNameIid[dns_name], image=self._IMG_TICK) # type: ignore
-        else:
-            self._trvw.item(self._mpNameIid[dns_name], image=self._IMG_CROSS) # type: ignore
+            iid,
+            image=self._IMG_TICK) # type: ignore
     
-    def _getDescr(self, dns_name: str) -> str:
-        code = self._mpNameRes[dns_name].code
-        descr = self._mpNameRes[dns_name].description
+    def _showMsg(self, iid: _Iid, msg: str) -> None:
+        values = self._trvw.item(iid, option='values')
+        values = list(values)
+        values[1] = msg
+        self._trvw.see(iid)
+        self._trvw.item(
+            iid,
+            values=tuple(values),)
+    
+    def _showRes(self, iid: _Iid, res: _HttpRes) -> None:
+        from utils.funcs import floatToEngineering as flToEngin
+        values = self._trvw.item(iid, option='values')
+        self._trvw.see(iid)
+        self._trvw.item(
+            iid,
+            values=(
+                values[0],
+                self._getDescr(iid),
+                flToEngin(self._mpNameRes[iid].latency, True) + 's'))
+        if self._mpNameRes[iid].code and self._mpNameRes[
+                dns_name].code // 100 == 2: # type: ignore
+            self._showOkImg(iid)
+        else:
+            self._showErrImg(iid)
+    
+    def _getDescr(self, iid: _Iid) -> str:
+        code = self._mpNameRes[iid].code
+        descr = self._mpNameRes[iid].description
         if code is not None:
             return f'{code}: {descr}'
         else:
@@ -442,6 +493,8 @@ class UrlDialog(tk.Toplevel):
         """Shows the dialog box and returns a `DnsServer` on completion
         or `None` on cancelation.
         """
+        self.grab_set()
+        self.focus_set()
         self.wm_deiconify()
         self.wait_window()
         return self._result
