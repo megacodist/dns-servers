@@ -11,7 +11,7 @@ from typing import Callable, TYPE_CHECKING, Iterable, Iterator
 from urllib.parse import ParseResult
 
 from db import DnsServer
-from ntwrk import NetConfig
+from ntwrk import NetConfig, NetConfigCode
 from utils.types import GifImage, TkImg
 
 type _Iid = str
@@ -92,10 +92,13 @@ class DnsTesterThrd(Thread):
                 continue
             # Setting new DNS...
             self._qRes.put(_('SETTING_DNS'))
-            self._config.setDnsSearchOrder(ips)
-            sleep(self._TIMNT_WAIT)
-            if ips != self._config.DNSServerSearchOrder:
-                self._qRes.put(_Error(_('UNABLE_CHANGE_IPS')))
+            code = self._config.setDnsSearchOrder(ips)
+            if code != NetConfigCode.SUCCESSFUL:
+                if code.__doc__ is None:
+                    msg = _('UNABLE_CHANGE_IPS').format(code.name)
+                else:
+                    msg = _('UNABLE_CHANGE_IPS').format(code.__doc__)
+                self._qRes.put(_Error(msg))
                 continue
             # Checking accessibility of the URL through the newly-set DNS...
             self._qRes.put(_('ACCESSING_URL'))
@@ -124,7 +127,8 @@ class DnsTesterThrd(Thread):
             # Sending back the result...
             self._qRes.put(response)
         # Rolling back the DNS...
-        self._config.setDnsSearchOrder(origIps)
+        if origIps is not None:
+            self._config.setDnsSearchOrder(origIps)
     
     def cancel(self) -> None:
         if self._cancel:
@@ -178,6 +182,7 @@ class UrlDialog(tk.Toplevel):
         self._afterId: str | None = None
         self._validColor = 'green'
         self._invalidColor = '#ca482e'
+        self._SEP = '#*#'
         self._urlParts: ParseResult | None = None
         self._dnsTester: DnsTesterThrd | None = None
         self._qIps = Queue[Iterable[IPv4 | IPv6]]()
@@ -268,7 +273,7 @@ class UrlDialog(tk.Toplevel):
             self._NAME_COL_IDX,
             self._RES_COL_IDX,
             self._DELAY_COL_IDX,))
-        self._trvw.column('#0', width=40, stretch=tk.NO)  # Hidden column for tree structure
+        self._trvw.column('#0', width=60, stretch=tk.NO)  # Hidden column for tree structure
         self._trvw.column(
             self._NAME_COL_IDX,
             anchor=tk.W,
@@ -344,7 +349,7 @@ class UrlDialog(tk.Toplevel):
                 self._mpReqIssued[reqIid] = issuedIid
             parentIid = issuedIid
             for idx, ip in enumerate(dns.toIpTuple()):
-                reqIid = f'{name}-{idx}'
+                reqIid = f'{name}{self._SEP}{idx}'
                 issuedIid = self._trvw.insert(
                     parent=parentIid,
                     index=tk.END,
@@ -398,6 +403,7 @@ class UrlDialog(tk.Toplevel):
             curr_iid: _Iid,
             iter_: Iterator[_Iid],
             ) -> None:
+        # Polling for the result...
         try:
             res = self._qRes.get_nowait()
         except Empty:
@@ -415,7 +421,9 @@ class UrlDialog(tk.Toplevel):
             elif isinstance(res, _HttpRes):
                 self._mpNameRes[curr_iid] = res
                 self._showRes(curr_iid, res)
+                self._showResImg(curr_iid)
                 nextIp = True
+        # Scheduling next action...
         if nextIp: # type: ignore
             self._afterId = self.after(
                 self._TIMINT_AFTER,
@@ -432,8 +440,11 @@ class UrlDialog(tk.Toplevel):
         try:
             curr_iid = next(child_iter)
         except StopIteration:
-            pass
+            # Process finished...
+            self._btn_startOk.config(state=tk.NORMAL)
         else:
+            ip = self._getIpByIid(curr_iid)
+            self._qIps.put([ip,])
             self._afterId = self.after(
                 self._TIMINT_AFTER,
                 self._pollResult,
@@ -475,11 +486,19 @@ class UrlDialog(tk.Toplevel):
                 values[0],
                 self._getDescr(iid),
                 flToEngin(self._mpNameRes[iid].latency, True) + 's'))
+    
+    def _showResImg(self, iid: _Iid) -> None:
         if self._mpNameRes[iid].code and self._mpNameRes[
-                dns_name].code // 100 == 2: # type: ignore
+                iid].code // 100 == 2: # type: ignore
             self._showOkImg(iid)
         else:
             self._showErrImg(iid)
+    
+    def _getIpByIid(self, iid: _Iid) -> IPv4 | IPv6:
+        iid_ = self._getIssuedIid(iid)
+        dnsName, ipIdx = iid_.split(self._SEP)
+        ipIdx = int(ipIdx)
+        return self._mpNameDns[dnsName].toIpTuple()[ipIdx]
     
     def _getDescr(self, iid: _Iid) -> str:
         code = self._mpNameRes[iid].code

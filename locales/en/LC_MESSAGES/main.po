@@ -153,7 +153,7 @@ msgid "NO_DNS_TO_TEST"
 msgstr "No URL to test the URL."
 
 msgid "UNABLE_CHANGE_IPS"
-msgstr "Cannot chnage DNS IPs"
+msgstr "Cannot chnage DNS IPs: {}"
 
 msgid "X_CANCELED"
 msgstr "{} was canceled"
