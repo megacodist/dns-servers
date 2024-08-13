@@ -191,8 +191,8 @@ msgstr "Select an item in the Network Adapters list."
 msgid "SELECT_IPS_IN_IPSVW"
 msgstr "Select one or more IPs in the IPs view."
 
-msgid "NO_IP_SELECTED"
-msgstr "No IP is selected."
+msgid "NO_IP_SELECTED_DNSVW"
+msgstr "No IP is selected in the DNS view."
 
 msgid "EMPTY_DNS_NAME"
 msgstr "DNS name cannot be empty."

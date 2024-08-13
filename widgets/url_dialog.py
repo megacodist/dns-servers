@@ -149,11 +149,15 @@ class UrlDialog(tk.Toplevel):
             master: tk.Misc,
             config: NetConfig,
             mp_name_dns: dict[str, DnsServer],
+            names_sep: str,
             tick_img: TkImg,
             cross_img: TkImg,
             arrow_img: TkImg,
             wait_gif: GifImage,
             ) -> None:
+        """Important arguments:
+        * `names_sep`: The delimiter that does not exist in DNS names
+        """
         super().__init__(master)
         self.title(_('TEST_URL'))
         self.resizable(False, False)
@@ -171,6 +175,8 @@ class UrlDialog(tk.Toplevel):
 
         `redIid -> issuedIid`
         """
+        self._SEP_NAMES = names_sep
+        """The delimiter that does not exist in DNS names."""
         self._IMG_TICK = tick_img
         self._IMG_CROSS = cross_img
         self._IMG_ARROW = arrow_img
@@ -334,6 +340,7 @@ class UrlDialog(tk.Toplevel):
             parent='',
             index=tk.END,
             iid=reqIid,
+            image=self._IMG_ARROW,
             values=(_('DHCP'), '', '',),)
         if reqIid != issuedIid:
             self._mpReqIssued[reqIid] = issuedIid
@@ -354,6 +361,7 @@ class UrlDialog(tk.Toplevel):
                     parent=parentIid,
                     index=tk.END,
                     iid=reqIid,
+                    image=self._IMG_ARROW,
                     values=(str(ip), '', '',),)
                 if reqIid != issuedIid:
                     self._mpReqIssued[reqIid] = issuedIid

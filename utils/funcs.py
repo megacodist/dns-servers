@@ -5,7 +5,7 @@
 
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 from queue import Queue
-from typing import Callable, Literal, TYPE_CHECKING
+from typing import Callable, Iterable, Literal, TYPE_CHECKING
 from urllib.parse import ParseResult
 
 from db import DnsServer, IDatabase
@@ -16,11 +16,15 @@ if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
 
 
-class OpFailedError(Exception):
-    """APIs of this module might raise this exception if their designated
-    operation failed.
-    """
-    pass
+def genSep(q: Queue[str] | None, names: Iterable[str]) -> str:
+    allCodes = set[int]()
+    for name in names:
+        allCodes = allCodes.union(ord(char) for char in name)
+    num = 0
+    while True:
+        if num not in allCodes:
+            return chr(num)
+        num += 1
 
 
 def mergeMsgs(braced: str, embed: str) -> str:

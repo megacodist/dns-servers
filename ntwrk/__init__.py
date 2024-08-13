@@ -17,7 +17,7 @@ from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from os import PathLike
 import re
-from typing import Any, Iterable, Iterator
+from typing import Any, Iterable, Iterator, overload
 from uuid import UUID
 
 
@@ -469,6 +469,10 @@ class AbsNetItem(ABC):
             return tuple(attrs)
         else:
             return self._removeUnder(attrs)
+    
+    @overload
+    def update(self, wmi_obj = None) -> bool:
+        pass
     
     def update(self, wmi_obj: Any) -> bool:
         """Updates this object with the provided"""

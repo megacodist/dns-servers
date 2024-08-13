@@ -3,13 +3,14 @@
 #
 
 from concurrent.futures import CancelledError, Future
+import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from pathlib import Path
 from queue import Queue
 import tkinter as tk
 from tkinter import NO, ttk
-from typing import Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING
 
 import PIL.Image
 import PIL.ImageTk
@@ -20,7 +21,7 @@ from .ips_view import IpsView
 from .message_view import MessageView, MessageType
 from db import DnsServer, IDatabase
 from ntwrk import ACIdx, AdapCfgBag, NetAdap, NetConfig, NetConfigCode
-from utils.async_ops import AsyncOpManager
+from utils.async_ops import AsyncOpManager, AsyncOp
 from utils.keyboard import KeyCodes, Modifiers
 from utils.net_item_monitor import NetItemMonitor
 from utils.settings import AppSettings
@@ -31,6 +32,20 @@ from widgets.net_item_info_win import NetItemInfoWin
 
 if TYPE_CHECKING:
     _: Callable[[str], str]
+
+
+class _Flags(enum.IntFlag):
+    NO_FLAGS = 0x00
+    PENDING_TEST = 0x01
+    """A URL tester is pending to run."""
+
+
+class _DnsWinOps(enum.IntEnum):
+    """Operations of the `DnsWin` widgets that requires tracking."""
+    GEN_SEP = 1
+    """The operation of generating a delimiter that does not exist in any
+    of the DNS servers' name.
+    """
 
 
 class DnsWin(tk.Tk, LicWinMixin):
@@ -68,11 +83,15 @@ class DnsWin(tk.Tk, LicWinMixin):
         self._qConfigChange = Queue[NetConfig]()
         self._qConfigCreation = Queue[NetConfig]()
         self._qConfigDeletion = Queue[NetConfig]()
-        self._netItemThrd: NetItemMonitor
+        self._netItemWatcher: NetItemMonitor
         """The thread looking for changes in network interfaces."""
+        self._flags = _Flags.NO_FLAGS
+        self._ops = dict[_DnsWinOps, AsyncOp]()
         self._infoWins = dict[ACIdx, NetItemInfoWin]()
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
+        self._SEP_DNS_NAMES: str | None = None
+        """The delimiter character which does not exist in DNS names."""
         # Images...
         self._GIF_WAIT: GifImage
         self._GIF_DWAIT: GifImage
@@ -386,7 +405,7 @@ class DnsWin(tk.Tk, LicWinMixin):
         # Cleaning up...
         self._asyncMngr.close()
         try:
-            self._netItemThrd.close()
+            self._netItemWatcher.close()
         except AttributeError:
             pass
         # Closing License window...
@@ -581,20 +600,6 @@ class DnsWin(tk.Tk, LicWinMixin):
         """Initializes the interface view and the """
         self._readNetAdaps()
         self._readDnses()
-    
-    def _onNetItemIdxChanged(self, idx: ACIdx | None) -> None:
-        if idx is None:
-            self._lfrm_ips.config(text='')
-            self._ipsvw.clear()
-            self._closeAllInfoWins()
-            return
-        adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
-        self._lfrm_ips.config(
-            text=adap.NetConnectionID)
-        netItem = self._acbag[idx]
-        self._ipsvw.populate(
-            netItem,
-            self._mpNameDns.values(),)
 
     def _readNetAdaps(self) -> None:
         """Reads network interfaces."""
@@ -615,10 +620,10 @@ class DnsWin(tk.Tk, LicWinMixin):
         else:
             # Running WMI monitoring thread...
             try:
-                self._netItemThrd
+                self._netItemWatcher
                 return
             except AttributeError:
-                self._netItemThrd = NetItemMonitor(
+                self._netItemWatcher = NetItemMonitor(
                     self,
                     self._qAdapChange,
                     self._qAdapCreation,
@@ -626,7 +631,7 @@ class DnsWin(tk.Tk, LicWinMixin):
                     self._qConfigChange,
                     self._qConfigCreation,
                     self._qConfigDeletion,)
-                self._netItemThrd.start()
+                self._netItemWatcher.start()
     
     def _readDnses(self) -> None:
         from utils.funcs import listDnses
@@ -642,11 +647,38 @@ class DnsWin(tk.Tk, LicWinMixin):
             ) -> None:
         try:
             self._mpNameDns, self._mpIpDns = fut.result()
-            self._dnsvw.populate(self._mpNameDns.values())
         except CancelledError:
             self._msgvw.AddMessage(
                 _('X_CANCELED').format(_('READING_DNSES')),
                 type_=MessageType.INFO)
+        else:
+            self._dnsvw.populate(self._mpNameDns.values())
+            self._generateSep()
+    
+    def _generateSep(self) -> None:
+        """Generates a separator which does not exist in DNS names."""
+        from utils.funcs import genSep
+        print('finding sep')
+        if _DnsWinOps.GEN_SEP in self._ops:
+            self._ops[_DnsWinOps.GEN_SEP].Cancel()
+        self._ops[_DnsWinOps.GEN_SEP] = self._asyncMngr.InitiateOp(
+            start_cb=genSep,
+            start_args=(list(self._mpNameDns.keys()),),
+            finish_cb=self._onSepGenerated,)
+    
+    def _onSepGenerated(self, fu: Future[str]) -> None:
+        self._SEP_DNS_NAMES = fu.result()
+        try:
+            del self._ops[_DnsWinOps.GEN_SEP]
+        except KeyError:
+            pass
+        #
+        code = ord(self._SEP_DNS_NAMES)
+        print(f'sep found: {hex(code)}')
+        #
+        if _Flags.PENDING_TEST & self._flags:
+            self._flags &= (~_Flags.PENDING_TEST)
+            self._testUrl()
     
     def _getNetItemIdx(self) -> ACIdx | None:
         """Gets the selected WMI network item (either adapter or
@@ -660,6 +692,20 @@ class DnsWin(tk.Tk, LicWinMixin):
                 type_=MessageType.WARNING)
             return
         return idx
+    
+    def _onNetItemIdxChanged(self, idx: ACIdx | None) -> None:
+        if idx is None:
+            self._lfrm_ips.config(text='')
+            self._ipsvw.clear()
+            self._closeAllInfoWins()
+            return
+        adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
+        self._lfrm_ips.config(
+            text=adap.NetConnectionID)
+        netItem = self._acbag[idx]
+        self._ipsvw.populate(
+            netItem,
+            self._mpNameDns.values(),)
     
     def _showInfoWin(self, idx: ACIdx | None = None) -> None:
         # Getting selected item in the NetAdapsView...
@@ -740,15 +786,27 @@ class DnsWin(tk.Tk, LicWinMixin):
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog
         dnsDialog = DnsDialog(self, self._mpNameDns, self._mpIpDns)
-        dns = dnsDialog.showDialog()
-        if dns is None:
+        newDns = dnsDialog.showDialog()
+        if newDns is None:
             return
-        # Adding DNS server...
-        for ip in dns.toSet():
-            self._mpIpDns[ip] = dns
-        self._mpNameDns[dns.name] = dns
-        self._db.insertDns(dns)
-        self._dnsvw.appendDns(dns)
+        # Adding DNS server to data structure...
+        for ip in newDns.toSet():
+            self._mpIpDns[ip] = newDns
+        self._mpNameDns[newDns.name] = newDns
+        self._db.insertDns(newDns)
+        #
+        self._dnsvw.appendDns(newDns)
+        #
+        netItem = self._getSelectedConfig()
+        if netItem is not None:
+            self._ipsvw.populate(netItem, self._mpNameDns.values())
+        # Updating `_SEP_DNS_NAMES`...
+        if self._SEP_DNS_NAMES is None:
+            if _DnsWinOps.GEN_SEP in self._ops:
+                self._ops[_DnsWinOps.GEN_SEP].Cancel()
+            self._generateSep()
+        elif self._SEP_DNS_NAMES in newDns.name:
+            self._generateSep()
     
     def _deleteDns(self) -> None:
         from tkinter.messagebox import askyesno
@@ -842,7 +900,7 @@ class DnsWin(tk.Tk, LicWinMixin):
             return None
         if not ips:
             self._msgvw.AddMessage(
-                _('NO_IP_SELECTED'),
+                _('NO_IP_SELECTED_DNSVW'),
                 type_=MessageType.ERROR)
             return None
         return ips
@@ -914,6 +972,13 @@ class DnsWin(tk.Tk, LicWinMixin):
         config.setDnsSearchOrder(ips)
     
     def _testUrl(self) -> None:
+        #
+        if self._SEP_DNS_NAMES is None:
+            self._flags |= _Flags.PENDING_TEST
+            if _DnsWinOps.GEN_SEP in self._ops:
+                self._generateSep()
+            return
+        self._flags &= (~_Flags.PENDING_TEST)
         # Getting selected config...
         config = self._getSelectedConfig()
         if config is None:
@@ -924,6 +989,7 @@ class DnsWin(tk.Tk, LicWinMixin):
             self,
             config,
             self._mpNameDns,
+            self._SEP_DNS_NAMES,
             self._IMG_GTICK,
             self._IMG_REDX,
             self._IMG_ARROW,
