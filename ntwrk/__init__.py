@@ -17,7 +17,7 @@ from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from os import PathLike
 import re
-from typing import Any, Iterable, Iterator, overload
+from typing import Any, Iterable, Iterator, TypeVar, overload
 from uuid import UUID
 
 
@@ -405,7 +405,16 @@ class MAC:
         return self._macAddr == "FF:FF:FF:FF:FF:FF"
 
 
+_T = TypeVar('_T', bound='AbsNetItem')
+
+
 class AbsNetItem(ABC):
+    @classmethod
+    @abstractmethod
+    def readAll(cls: type[_T], **kwargs) -> tuple[_T, ...]:
+        """Reads all instances from WMI which satisfy the conditions."""
+        pass
+
     def __repr__(self) -> str:
         attrValues = list[str]()
         for attr in self.getDeterminant(leading_under=True):
@@ -470,12 +479,11 @@ class AbsNetItem(ABC):
         else:
             return self._removeUnder(attrs)
     
-    @overload
-    def update(self, wmi_obj = None) -> bool:
-        pass
-    
-    def update(self, wmi_obj: Any) -> bool:
-        """Updates this object with the provided"""
+    def update(self, wmi_obj: Any | None = None) -> bool:
+        """Updates this `AbsNetItem` object with the provided WMI object.
+        If nothing is provided, this `AbsNetItem` object updates itself
+        from the WMI.
+        """
         selfChanges = dict[str, Any]()
         changed = False
         for attr in self.getAttrs(leading_under=True):
@@ -507,6 +515,29 @@ class NetAdap(AbsNetItem):
     """Instances of this class represent instances of `Win32_NetworkAdapter`
     class on WMI.
     """
+    @classmethod
+    def readAll(cls, **kwargs) -> tuple[NetAdap, ...]:
+        import wmi
+        import pythoncom
+        pythoncom.CoInitialize()
+        wmi_ = wmi.WMI()
+        kwargs['PhysicalAdapter'] = True
+        wmiAdaps = wmi_.Win32_NetworkAdapter(**kwargs)
+        # Converting COM objects into `NetAdap` objects...
+        adaps = list[NetAdap]()
+        badWmiAdaps = False
+        for adap in wmiAdaps:
+            try:
+                adap = NetAdap(adap)
+            except TypeError:
+                badWmiAdaps = True
+            else:
+                adaps.append(adap)
+        if badWmiAdaps:
+            logging.error(
+                'some COM objects cannot be converted into "NetAdap"')
+        pythoncom.CoUninitialize()
+        return tuple(adaps)
 
     @ classmethod
     def anumWinNetAdaps(cls) -> AdapCfgBag:
@@ -659,6 +690,28 @@ class NetConfig(AbsNetItem):
     """Instances of this class represent instances of
     `Win32_NetworkAdapterConfiguration` class on WMI.
     """
+    @classmethod
+    def readAll(cls, **kwargs) -> tuple[NetConfig, ...]:
+        import wmi
+        import pythoncom
+        pythoncom.CoInitialize()
+        wmi_ = wmi.WMI()
+        wmiAdaps = wmi_.Win32_NetworkAdapterConfiguration(**kwargs)
+        # Converting COM objects into `NetAdap` objects...
+        configs = list[NetConfig]()
+        badWmiConfigs = False
+        for adap in wmiAdaps:
+            try:
+                adap = NetConfig(adap)
+            except TypeError:
+                badWmiConfigs = True
+            else:
+                configs.append(adap)
+        if badWmiConfigs:
+            logging.error(
+                'some COM objects cannot be converted into "NetAdap"')
+        pythoncom.CoUninitialize()
+        return tuple(configs)
 
     def __init__(self, obj: Any) -> None:
         """Initializes an instance of `NetConfig` class with an object
@@ -865,69 +918,19 @@ class NetConfig(AbsNetItem):
 
 
 def _enumNetAdaps() -> AdapCfgBag:
-    import pythoncom
-    import win32com.client
-    #
-    pythoncom.CoInitialize()
-    wmi = win32com.client.GetObject("winmgmts:")
-    # Querying network adapters...
-    adapsQuery = f"""
-        SELECT
-            *
-        FROM
-            Win32_NetworkAdapter
-        WHERE
-            PhysicalAdapter=True"""
-    wmiAdaps = wmi.ExecQuery(adapsQuery)
-    #_saveWmiObj(wmiAdaps, r'H:\foo2-adapters.txt') # type: ignore
-    # Querying network adapter configurations...
-    configQuery = f"""
-        SELECT
-            *
-        FROM
-            Win32_NetworkAdapterConfiguration"""
-    wmiConfigs = wmi.ExecQuery(configQuery)
-    #_saveWmiObj(wmiConfigs, r'H:\foo2-configs.txt') # type: ignore
-    # Merging results...
-    # Converting COM objects into `NetAdap` objects...
+    adaps = NetAdap.readAll()
+    configs = NetConfig.readAll()
     acbag = AdapCfgBag()
-    dupAdaps = list[NetAdap]()
-    badWmiAdaps = False
-    for adap in wmiAdaps:
-        try:
-            adap = NetAdap(adap)
-        except TypeError:
-            badWmiAdaps = True
-            continue
+    for adap in adaps:
         try:
             acbag.addAdap(adap)
         except ValueError:
-            dupAdaps.append(adap)
-    if badWmiAdaps:
-        logging.error('some COM objects cannot be converted into "NetAdap"')
-    #
-    dupCfgs = list[NetConfig]()
-    badWmiCfgs = False
-    for config in wmiConfigs:
-        try:
-            config = NetConfig(config)
-        except  TypeError:
-            badWmiCfgs = True
-            continue
+            pass
+    for config in configs:
         try:
             acbag.addConfig(config)
-        except IndexError:
-            dupCfgs.append(config)
-        except ValueError:
+        except (ValueError, IndexError,):
             pass
-    if badWmiCfgs:
-        logging.error(
-            'some COM objects cannot be converted into "NetConfig"')
-    #
-    if dupAdaps and dupCfgs:
-        print("Merging should've been continued!!!")
-    #
-    pythoncom.CoUninitialize()
     return acbag
 
 
