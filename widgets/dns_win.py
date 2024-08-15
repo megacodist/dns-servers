@@ -27,7 +27,7 @@ from utils.net_item_monitor import NetItemMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
 from widgets.license_win import LicWinMixin
-from widgets.net_item_info_win import NetItemInfoWin
+from widgets.net_item_info_win import InfoWin, InfoWinMixin
 
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ class _DnsWinOps(enum.IntEnum):
     """
 
 
-class DnsWin(tk.Tk, LicWinMixin):
+class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
     def __init__(
             self,
             res_dir: Path,
@@ -67,6 +67,14 @@ class DnsWin(tk.Tk, LicWinMixin):
         self.geometry(f'{settings.win_width}x{settings.win_height}+'
             f'{settings.win_x}+{settings.win_y}')
         #
+        from utils.funcs import (getNetItemAttrs, getNetItemTitle,
+            getNetItemHashable)
+        InfoWinMixin.__init__(
+            self,
+            getNetItemTitle,
+            getNetItemAttrs,
+            settings,
+            hash_cb=getNetItemHashable)
         LicWinMixin.__init__(self, lic_file, settings)
         #
         self._RES_DIR = res_dir
@@ -87,7 +95,7 @@ class DnsWin(tk.Tk, LicWinMixin):
         """The thread looking for changes in network interfaces."""
         self._flags = _Flags.NO_FLAGS
         self._ops = dict[_DnsWinOps, AsyncOp]()
-        self._infoWins = dict[ACIdx, NetItemInfoWin]()
+        self._infoWins = dict[ACIdx, InfoWin]()
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
         self._SEP_DNS_NAMES: str | None = None
@@ -410,7 +418,7 @@ class DnsWin(tk.Tk, LicWinMixin):
             pass
         # Closing License window...
         self.closeLicWin()
-        # Closing all open NetItemInfoWin windows...
+        # Closing all open InfoWin windows...
         self._closeAllInfoWins()
         # Destroying the window...
         self.destroy()
@@ -719,7 +727,7 @@ class DnsWin(tk.Tk, LicWinMixin):
             #self._infoWins[idx].grab_set()
             return
         #
-        infoWin = NetItemInfoWin(
+        infoWin = InfoWin(
             self,
             self._acbag,
             idx,
@@ -771,8 +779,8 @@ class DnsWin(tk.Tk, LicWinMixin):
             return
         self._grabInoWinSettings(infoWin)
     
-    def _grabInoWinSettings(self, info_win: NetItemInfoWin) -> None:
-        """Grabs settings for a `NetItemInfoWin` to save into the
+    def _grabInoWinSettings(self, info_win: InfoWin) -> None:
+        """Grabs settings for a `InfoWin` to save into the
         `_settings` attribute.
         """
         nidSettings = info_win.settings

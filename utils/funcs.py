@@ -9,11 +9,39 @@ from typing import Callable, Iterable, Literal, TYPE_CHECKING
 from urllib.parse import ParseResult
 
 from db import DnsServer, IDatabase
-from ntwrk import AdapCfgBag, NetAdap
+from ntwrk import AdapCfgBag, NetAdap, NetConfig
 
 
 if TYPE_CHECKING:
     _: Callable[[str], str] = lambda a: a
+
+
+def getNetItemAttrs(net_item: NetAdap | NetConfig) -> Iterable[str]:
+    return net_item.getAttrs()
+
+
+def getNetItemHashable(net_item: NetAdap | NetConfig) -> tuple[int, int]:
+    """Gets a hashable object for `NetAdap` or `NetConfig` objects."""
+    if isinstance(net_item, NetAdap):
+        return (0, net_item.Index,)
+    elif isinstance(net_item, NetConfig):
+        return (1, net_item.Index,)
+    else:
+        raise TypeError(
+            'expected NetAdap or NetConfig but got '
+            f'{net_item.__class__.__qualname__}')
+
+
+def getNetItemTitle(net_item: NetAdap | NetConfig) -> str:
+    """Gets a title for `NetAdap` or `NetConfig` objects."""
+    if isinstance(net_item, NetAdap):
+        return net_item.NetConnectionID
+    elif isinstance(net_item, NetConfig):
+        return f'Index {net_item.Index}'
+    else:
+        raise TypeError(
+            'expected NetAdap or NetConfig but got '
+            f'{net_item.__class__.__qualname__}')
 
 
 def genSep(q: Queue[str] | None, names: Iterable[str]) -> str:
