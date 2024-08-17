@@ -71,6 +71,12 @@ msgstr "Secondary IPv4"
 msgid "SECON_6"
 msgstr "Secondary IPv6"
 
+msgid "ADAP_TITLE"
+msgstr "Adapter '{}'"
+
+msgid "CONFIG_TITLE"
+msgstr "Config Index {}"
+
 msgid "RESPONSE"
 msgstr "Response"
 
@@ -100,6 +106,9 @@ msgstr "DHCP"
 
 msgid "LICENSE"
 msgstr "License"
+
+msgid "REFRESH"
+msgstr "Refresh"
 
 msgid "UNKNOWN_CODE"
 msgstr "Unknown HTTP status code"

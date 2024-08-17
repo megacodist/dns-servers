@@ -35,9 +35,9 @@ def getNetItemHashable(net_item: NetAdap | NetConfig) -> tuple[int, int]:
 def getNetItemTitle(net_item: NetAdap | NetConfig) -> str:
     """Gets a title for `NetAdap` or `NetConfig` objects."""
     if isinstance(net_item, NetAdap):
-        return net_item.NetConnectionID
+        return _('ADAP_TITLE').format(net_item.NetConnectionID)
     elif isinstance(net_item, NetConfig):
-        return f'Index {net_item.Index}'
+        return _('CONFIG_TITLE').format(net_item.Index)
     else:
         raise TypeError(
             'expected NetAdap or NetConfig but got '

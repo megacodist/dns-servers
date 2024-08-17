@@ -483,7 +483,19 @@ class AbsNetItem(ABC):
         """Updates this `AbsNetItem` object with the provided WMI object.
         If nothing is provided, this `AbsNetItem` object updates itself
         from the WMI.
+        
+        In case of reading WMI (`None`), if results are unexpected, it
+        raises `RuntimeError`.
         """
+        if wmi_obj is None:
+            mpKeyValue = {
+                attr[1:]:getattr(self, attr)
+                for attr in self.getDeterminant(leading_under=True)}
+            objs = self.readAll(**mpKeyValue)
+            nObjs = len(objs)
+            if nObjs != 1:
+                raise RuntimeError(f'expected one WMI object but got {nObjs}')
+            wmi_obj = objs[0]
         selfChanges = dict[str, Any]()
         changed = False
         for attr in self.getAttrs(leading_under=True):

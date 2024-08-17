@@ -2,7 +2,7 @@
 # 
 #
 
-from dataclasses import dataclass
+from __future__ import annotations
 import logging
 import tkinter as tk
 from tkinter import ttk
@@ -22,26 +22,32 @@ class _InfoWinSettings:
     def checkObj(cls, sett_obj: Any) -> bool:
         """Checks whether the settings object has necessary attributes."""
         return all([
-            hasattr(sett_obj, 'licw_x'),
-            isinstance(getattr(sett_obj, 'licw_x'), int),
-            hasattr(sett_obj, 'licw_y'),
-            isinstance(getattr(sett_obj, 'licw_y'), int),
-            hasattr(sett_obj, 'licw_width'),
-            isinstance(getattr(sett_obj, 'licw_width'), int),
-            hasattr(sett_obj, 'licw_height'),
-            isinstance(getattr(sett_obj, 'licw_height'), int),])
+            hasattr(sett_obj, 'infow_x'),
+            isinstance(getattr(sett_obj, 'infow_x'), int),
+            hasattr(sett_obj, 'infow_y'),
+            isinstance(getattr(sett_obj, 'infow_y'), int),
+            hasattr(sett_obj, 'infow_width'),
+            isinstance(getattr(sett_obj, 'infow_width'), int),
+            hasattr(sett_obj, 'infow_height'),
+            isinstance(getattr(sett_obj, 'infow_height'), int),
+            hasattr(sett_obj, 'infow_key_width'),
+            isinstance(getattr(sett_obj, 'infow_key_width'), int),
+            hasattr(sett_obj, 'infow_value_width'),
+            isinstance(getattr(sett_obj, 'infow_value_width'), int),])
 
     @classmethod
-    def fromObj(cls, sett_obj: Any) -> _LicWinSettings:
+    def fromObj(cls, sett_obj: Any) -> _InfoWinSettings:
         """Reads license window related settings from application settings
         object. Raises `TypeError` upon any inconsistency.
         """
         try:
-            return _LicWinSettings(
-                sett_obj.licw_x,
-                sett_obj.licw_y,
-                sett_obj.licw_width,
-                sett_obj.licw_height)
+            return _InfoWinSettings(
+                sett_obj.infow_x,
+                sett_obj.infow_y,
+                sett_obj.infow_width,
+                sett_obj.infow_height,
+                sett_obj.infow_key_width,
+                sett_obj.infow_value_width,)
         except AttributeError as err:
             raise TypeError(err.args)
 
@@ -51,11 +57,15 @@ class _InfoWinSettings:
             y: int,
             width: int,
             height: int,
+            key_width: int,
+            value_width: int,
             ) -> None:
         self.x = x
         self.y = y
         self.width = width
         self.height = height
+        self.keyWidth = key_width
+        self.valueWidth = value_width
     
     def save(self, sett_obj: Any) -> None:
         """Saves this object to the provided settings object (`sett_obj`).
@@ -63,46 +73,47 @@ class _InfoWinSettings:
         """
         origValues = dict[str, Any]()
         try:
-            temp = sett_obj.licw_x
-            sett_obj.licw_x = self.x
-            origValues['licw_x'] = temp
-            temp = sett_obj.licw_y
-            sett_obj.licw_y = self.y
-            origValues['licw_y'] = temp
-            temp = sett_obj.licw_width
-            sett_obj.licw_width = self.width
-            origValues['licw_width'] = temp
-            temp = sett_obj.licw_height
-            sett_obj.licw_height = self.height
-            origValues['licw_height'] = temp
+            temp = sett_obj.infow_x
+            sett_obj.infow_x = self.x
+            origValues['infow_x'] = temp
+            temp = sett_obj.infow_y
+            sett_obj.infow_y = self.y
+            origValues['infow_y'] = temp
+            temp = sett_obj.infow_width
+            sett_obj.infow_width = self.width
+            origValues['infow_width'] = temp
+            temp = sett_obj.infow_height
+            sett_obj.infow_height = self.height
+            origValues['infow_height'] = temp
+            temp = sett_obj.infow_key_width
+            sett_obj.infow_key_width = self.keyWidth
+            origValues['infow_key_width'] = temp
+            temp = sett_obj.infow_value_width
+            sett_obj.infow_value_width = self.valueWidth
+            origValues['infow_value_width'] = temp
         except (AttributeError, TypeError) as err:
             # Rolling back modifications to the `_settings`...
             for attr, value in origValues.items():
                 setattr(sett_obj, attr, value)
             logging.error(
-                'failed to save settings of license window to the '
+                'failed to save settings of info window to the '
                     'application settings object: %s',
                 err)
 
 
-class InfoWin(tk.Toplevel):
+class _InfoWin(tk.Toplevel):
     def __init__(
             self,
             master: tk.Misc,
             obj: Any,
             title_cb: Callable[[Any], str],
             attrs_cb: Callable[[Any], Iterable[str]],
-            close_cb: Callable[[int], None],
+            close_cb: Callable[[Any], None],
             *,
-            xy: tuple[int, int] | None = None,
-            width: int = 400,
-            height: int = 350,
-            key_width: int = 150,
-            value_width: int = 180,
+            settings: _InfoWinSettings | None = None,
             ) -> None:
         super().__init__(master)
         self.resizable(True, True)
-        self.geometry(f'{width}x{height}')
         #
         self._obj = obj
         """The object its attributes to be shown."""
@@ -111,10 +122,13 @@ class InfoWin(tk.Toplevel):
         self._cbAttrs = attrs_cb
         """The callback which gives attributes of the object."""
         self._cbClose = close_cb
+        """This callback saves settings just before close."""
+        self.settings = settings if settings is not None else \
+            _InfoWinSettings(0, 0, 400, 300, 150, 150,)
         #
         self._sheet = Sheet(self, headers=[_('KEY'), _('VALUE'),])
-        self._sheet.column_width(0, key_width)
-        self._sheet.column_width(1, value_width)
+        self._sheet.column_width(0, self.settings.keyWidth)
+        self._sheet.column_width(1, self.settings.valueWidth)
         self._sheet.enable_bindings(
             'single_select',
             'drag_select',
@@ -131,20 +145,22 @@ class InfoWin(tk.Toplevel):
             'copy',)
         self._sheet.pack(fill=tk.BOTH, expand=True)
         #
-        self.settings = _InfoWinSettings(
-            0,
-            0,
-            width,
-            height,
-            key_width,
-            value_width)
+        self._setGeometry(not bool(settings))
         self.populateInfo()
-        if xy is None:
-            self.after(10, self._centerDialog, master)
-        else:
-            self.geometry(f'+{xy[0]}+{xy[1]}')
         # Binding events...
         self.protocol('WM_DELETE_WINDOW', self.closeWin)
+    
+    def _setGeometry(self, center: bool) -> None:
+        """Sets the geometry of this windows. `center` specifies whether
+        to show this windows at the center of its parent window.
+        """
+        if center:
+            self.geometry(f'{self.settings.width}x{self.settings.height}')
+            self.after(10, self._centerDialog, self.master)
+        else:
+            self.geometry(
+                f'{self.settings.width}x{self.settings.height}'
+                f'+{self.settings.x}+{self.settings.y}')
     
     def _centerDialog(self, parent: tk.Misc) -> None:
         _, x, y = parent.winfo_geometry().split('+')
@@ -216,6 +232,7 @@ class InfoWinMixin:
             self,
             title_cb: Callable[[_Hashable], str],
             attrs_cb: Callable[[_Hashable], Iterable[str]],
+            sett_obj: Any | None = None,
             ) -> None:
         """Initializes a new instance of this mixin. If the objects to see
         their attributes are hashable, and you don't need to specify a
@@ -228,6 +245,7 @@ class InfoWinMixin:
             self,
             title_cb: Callable[[_T], str],
             attrs_cb: Callable[[_T], Iterable[str]],
+            sett_obj: Any | None = None,
             *,
             hash_cb: Callable[[_T], _Hashable] | None = None,
             ) -> None:
@@ -256,7 +274,9 @@ class InfoWinMixin:
         self._cbTitle = title_cb
         self._cbAttrs = attrs_cb
         self._cbHash = hash_cb
-        self._infoWins = dict[int, InfoWin]()
+        self._settObj = sett_obj if sett_obj is not None and \
+            _InfoWinSettings.checkObj(sett_obj) else None
+        self._infoWins = dict[int, _InfoWin]()
     
     def _getObjHash(self, obj: _T) -> int:
         """Gets the unique hash for provided object."""
@@ -265,40 +285,62 @@ class InfoWinMixin:
             temp = self._cbHash(obj) # type: ignore
         return hash(temp)
     
-    def _grabInoWinSettings(self, info_win: InfoWin) -> None:
-        """Grabs settings for a `InfoWin` to save into the
-        `_settings` attribute.
-        """
-        nidSettings = info_win.settings
-        self._settings.nid_x = nidSettings.x
-        self._settings.nid_y = nidSettings.y
-        self._settings.nid_width = nidSettings.width
-        self._settings.nid_height = nidSettings.height
-        self._settings.nid_key_width = nidSettings.key_width
-        self._settings.nid_value_width = nidSettings.value_int
-    
-    def _onInfoWinClosed(self, obj: _T) -> None:
-        pass
-    
     def showInfoWin(self, obj: _T) -> None:
         hash_ = self._getObjHash(obj)
         try:
             infoWin = self._infoWins[hash_]
         except KeyError:
-            infoWin = InfoWin(
+            try:
+                settings = _InfoWinSettings.fromObj(self._settObj) if \
+                    self._settObj is not None else None
+            except TypeError:
+                settings = None
+            infoWin = _InfoWin(
                 self, # type: ignore
                 obj,
                 self._cbTitle,
                 self._cbAttrs,
-                self._onInfoWinClosed,)
+                self._onInfoWinClosed,
+                settings=settings)
+            self._infoWins[hash_] = infoWin
         else:
             infoWin.showWin()
+    
+    def _onInfoWinClosed(self, obj: _T) -> None:
+        hash_ = self._getObjHash(obj)
+        try:
+            infoWin = self._infoWins[hash_]
+        except KeyError:
+            logging.debug(f'failed to find info window associated with {obj}')
+        else:
+            if self._settObj is not None:
+                infoWin.settings.save(self._settObj)
+            del self._infoWins[hash_]
     
     def closeInfoWin(self, obj: _T) -> None:
         hash_ = self._getObjHash(obj)
         try:
             infoWin = self._infoWins[hash_]
         except KeyError:
-            pass
+            logging.debug(f'failed to find info window associated with {obj}')
         else:
             infoWin.closeWin()
+    
+    def closeAllInfoWins(self) -> None:
+        lsInfoWins = list(self._infoWins.values())
+        for netWin in lsInfoWins[:-1]:
+            netWin.destroy()
+        try:
+            lsInfoWins[-1].closeWin()
+        except IndexError:
+            pass
+        self._infoWins.clear()
+    
+    def refreshInfoWin(self, obj: _T) -> None:
+        hash_ = self._getObjHash(obj)
+        try:
+            infoWin = self._infoWins[hash_]
+        except KeyError:
+            pass
+        else:
+            infoWin.populateInfo()

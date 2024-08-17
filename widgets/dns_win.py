@@ -7,6 +7,7 @@ import enum
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
 import logging
 from pathlib import Path
+from posixpath import isabs
 from queue import Queue
 import tkinter as tk
 from tkinter import NO, ttk
@@ -27,7 +28,7 @@ from utils.net_item_monitor import NetItemMonitor
 from utils.settings import AppSettings
 from utils.types import GifImage, TkImg
 from widgets.license_win import LicWinMixin
-from widgets.net_item_info_win import InfoWin, InfoWinMixin
+from widgets.net_item_info_win import _InfoWin, InfoWinMixin
 
 
 if TYPE_CHECKING:
@@ -95,7 +96,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         """The thread looking for changes in network interfaces."""
         self._flags = _Flags.NO_FLAGS
         self._ops = dict[_DnsWinOps, AsyncOp]()
-        self._infoWins = dict[ACIdx, InfoWin]()
+        self._infoWins = dict[ACIdx, _InfoWin]()
         self._mpNameDns: dict[str, DnsServer]
         self._mpIpDns: dict[IPv4 | IPv6, DnsServer]
         self._SEP_DNS_NAMES: str | None = None
@@ -361,6 +362,9 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
             label=_('NET_ADAPS'),
             menu=self._menu_netAdaps)
         self._menu_netAdaps.add_cascade(
+            label=_('REFRESH'),
+            command=self._updateNetItem)
+        self._menu_netAdaps.add_cascade(
             label=_('READ_ADAPS'),
             command=self._readNetAdaps)
         self._menu_netAdaps.add_cascade(
@@ -419,7 +423,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         # Closing License window...
         self.closeLicWin()
         # Closing all open InfoWin windows...
-        self._closeAllInfoWins()
+        self.closeAllInfoWins()
         # Destroying the window...
         self.destroy()
     
@@ -477,7 +481,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         # Updating the NetAdapsView...
         self._adapsvw.changeAdap(curAdap, adapIdx)
         #
-        self._refreshInfoWin(adapIdx)
+        self.refreshInfoWin(newAdap)
     
     def _onNetAdapCreated(self, _: tk.Event) -> None:
         newAdap = self._qAdapCreation.get()
@@ -508,7 +512,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
                 delAdap,)
             return
         # Closing its info win if any...
-        self._closeInfoWin(adapIdx)
+        self.closeInfoWin(delAdap)
         #
         vwIdx = self._adapsvw.getSelectedIdx()
         if vwIdx is not None and vwIdx.getAdap() == adapIdx:
@@ -531,7 +535,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         if not changed:
             return
         # Updaing its info win if any...
-        self._refreshInfoWin(configIdx)
+        self.refreshInfoWin(newConfig)
         # Updating the adaps view...
         self._adapsvw.changeConfig(newConfig, configIdx)
         adapIdx = configIdx.getAdap()
@@ -591,7 +595,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         # Removing from the bag...
         self._acbag.delIdx(configIdx)
         # Closing its info win if any...
-        self._closeInfoWin(configIdx)
+        self.closeInfoWin(delConfig)
         # Updating the IpsView...
         vwIdx = self._getNetItemIdx()
         if vwIdx is not None:
@@ -705,7 +709,6 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         if idx is None:
             self._lfrm_ips.config(text='')
             self._ipsvw.clear()
-            self._closeAllInfoWins()
             return
         adap: NetAdap = self._acbag[idx.getAdap()] # type: ignore
         self._lfrm_ips.config(
@@ -722,74 +725,26 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
             if idx is None:
                 return
         # 
-        if idx in self._infoWins:
-            self._infoWins[idx].focus_set()
-            #self._infoWins[idx].grab_set()
+        self.showInfoWin(self._acbag[idx])
+    
+    def _updateNetItem(self) -> None:
+        idx = self._getNetItemIdx()
+        if idx is None:
             return
-        #
-        infoWin = InfoWin(
-            self,
-            self._acbag,
-            idx,
-            self._onInfoWinClosed,
-            xy=(self._settings.nid_x, self._settings.nid_y,),
-            width=self._settings.nid_width,
-            height=self._settings.nid_height,
-            key_width=self._settings.nid_key_width,
-            value_width=self._settings.nid_value_width,)
-        self._infoWins[idx] = infoWin
-        infoWin.showWin()
-    
-    def _closeInfoWin(self, idx: ACIdx) -> None:
+        netItem = self._acbag[idx]
         try:
-            infoWin = self._infoWins[idx]
-        except KeyError:
-            pass
-        else:
-            infoWin.closeWin()
-    
-    def _closeAllInfoWins(self) -> None:
-        lsInfoWins = list(self._infoWins.values())
-        for netWin in lsInfoWins[:-1]:
-            netWin.destroy()
-        try:
-            lsInfoWins[-1].closeWin()
-        except IndexError:
-            pass
-        else:
-            self._grabInoWinSettings(lsInfoWins[-1])
-    
-    def _refreshInfoWin(self, idx: ACIdx) -> None:
-        try:
-            infoWin = self._infoWins[idx]
-        except KeyError:
-            pass
-        else:
-            infoWin.populateInfo()
-    
-    def _onInfoWinClosed(self, idx: ACIdx) -> None:
-        try:
-            infoWin = self._infoWins[idx]
-            del self._infoWins[idx]
-        except KeyError:
-            logging.error(
-                'an attempt to close an info window but index does not exist\n%s',
-                idx,
-                stack_info=True,)
-            return
-        self._grabInoWinSettings(infoWin)
-    
-    def _grabInoWinSettings(self, info_win: InfoWin) -> None:
-        """Grabs settings for a `InfoWin` to save into the
-        `_settings` attribute.
-        """
-        nidSettings = info_win.settings
-        self._settings.nid_x = nidSettings.x
-        self._settings.nid_y = nidSettings.y
-        self._settings.nid_width = nidSettings.width
-        self._settings.nid_height = nidSettings.height
-        self._settings.nid_key_width = nidSettings.key_width
-        self._settings.nid_value_width = nidSettings.value_int
+            changed = netItem.update()
+            if changed:
+                if idx.isAdap():
+                    self._qAdapChange.put(netItem) # type: ignore
+                    self.event_generate('<<NetAdapChanged>>')
+                else:
+                    self._qConfigChange.put(netItem) # type: ignore
+                    self.event_generate('<<NetConfigChanged>>')
+            else:
+                logging.debug(f'no important change in {netItem}')
+        except RuntimeError as err:
+            logging.debug(err)
 
     def _addDns(self) -> None:
         from .dns_dialog import DnsDialog

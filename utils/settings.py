@@ -23,12 +23,12 @@ class AppSettings(types_module.AppSettings):
     prim_6_col_width = 100
     secon_6_col_width = 100
     # InfoWin...
-    nid_x = 200
-    nid_y = 200
-    nid_width = 400
-    nid_height = 300
-    nid_key_width = 150
-    nid_value_width = 180
+    infow_x = 200
+    infow_y = 200
+    infow_width = 400
+    infow_height = 300
+    infow_key_width = 150
+    infow_value_width = 180
     # License window settings...
     licw_x = 200
     licw_y = 150
