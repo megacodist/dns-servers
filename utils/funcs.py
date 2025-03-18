@@ -45,14 +45,14 @@ def getNetItemTitle(net_item: NetAdap | NetConfig) -> str:
 
 
 def genSep(q: Queue[str] | None, names: Iterable[str]) -> str:
-    allCodes = set[int]()
-    for name in names:
-        allCodes = allCodes.union(ord(char) for char in name)
-    num = 0
-    while True:
-        if num not in allCodes:
-            return chr(num)
-        num += 1
+    from itertools import combinations
+    import string
+    allChars = string.punctuation + string.digits + string.ascii_letters
+    for n in range(1, len(allChars)):
+        for choice in combinations(allChars, n):
+            perm = ''.join(choice)
+            if not any(perm in name for name in names):
+                return perm
 
 
 def mergeMsgs(braced: str, embed: str) -> str:

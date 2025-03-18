@@ -3,6 +3,8 @@
 #
 
 import gettext
+import sys
+import platform
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
@@ -30,19 +32,34 @@ if TYPE_CHECKING:
 
 
 def main() -> None:
+    # Declaraing variables ----------------------
+    from utils.spinner import Spinner, SpinnerStyle
     global _RES_DIR
     global _settings
-    from utils.logger import configureLogger
+    spinner = Spinner(SpinnerStyle.BOUNCING_BALL)
+    # Performing jobs ---------------------------
+    # Check OS...
+    spinner.start(_('CHECKING_OS'))
+    if platform.system() != "Windows":
+        print(_("OS_INCOMPATIBILITY"))
+        sys.exit(1)
+    # Check Python version...
+    if sys.version_info < (3, 12):
+        print(_("This application requires Python 3.12 or higher."))
+        sys.exit(1)
     # Configuring logger...
-    print(_('CONFIG_LOGGER'))
+    spinner.start(_('CONFIG_LOGGER'))
+    from utils.logger import configureLogger
     configureLogger(_APP_DIR / 'log.log')
+    spinner.stop()
     # Loading application settings...
-    print(_('LOADING_SETTINGS'))
+    spinner.start(_('LOADING_SETTINGS'))
     try:
         _settings = AppSettings()
         _settings.Load(_APP_DIR / 'config.bin')
     except InvalidFileError:
         print(_('INVALID_SETTINGS_FILE'))
+    spinner.stop()
     # Loading database...
     from db.sqlite3 import SqliteDb
     db = SqliteDb(_APP_DIR / 'db.db3')

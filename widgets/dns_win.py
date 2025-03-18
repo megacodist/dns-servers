@@ -685,8 +685,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         except KeyError:
             pass
         #
-        code = ord(self._SEP_DNS_NAMES)
-        print(f'sep found: {hex(code)}')
+        logging.debug(f'sep found: {self._SEP_DNS_NAMES}')
         #
         if _Flags.PENDING_TEST & self._flags:
             self._flags &= (~_Flags.PENDING_TEST)
@@ -956,7 +955,8 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
             self._IMG_GTICK,
             self._IMG_REDX,
             self._IMG_ARROW,
-            self._GIF_DWAIT)
+            self._GIF_DWAIT,
+            delimiter=self._SEP_DNS_NAMES)
         dns = dnsDialog.showDialog()
         if dns is None:
             return

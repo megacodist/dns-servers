@@ -1,3 +1,7 @@
+#
+# 
+#
+
 import time
 import sys
 import threading
@@ -202,19 +206,3 @@ class Spinner:
             sys.stdout.flush()
             self._frameIdx += 1
             time.sleep(self._INTVL_SPIN)
-
-
-if __name__ == "__main__":
-    import msvcrt
-    import random
-
-    spinner = Spinner()
-    for style in SpinnerStyle:
-        print("Spinner style:", style.name)
-        spinner.spinner = style
-        spinner.start("Testing")
-        time.sleep(3)
-        spinner.stop(random.choice(["Test done!!", None, ]))
-        print()
-    print("Press anything to quit: ")
-    msvcrt.getwche()

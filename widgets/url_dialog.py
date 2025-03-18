@@ -3,6 +3,7 @@
 #
 
 from ipaddress import IPv4Address as IPv4, IPv6Address as IPv6
+import logging
 from queue import Empty, Queue
 from threading import Event, Thread
 import tkinter as tk
@@ -12,6 +13,7 @@ from urllib.parse import ParseResult
 
 from db import DnsServer
 from ntwrk import NetConfig, NetConfigCode
+from utils.keyboard import KeyCodes, Modifiers
 from utils.types import GifImage, TkImg
 
 type _Iid = str
@@ -154,6 +156,7 @@ class UrlDialog(tk.Toplevel):
             cross_img: TkImg,
             arrow_img: TkImg,
             wait_gif: GifImage,
+            delimiter: str,
             ) -> None:
         """Important arguments:
         * `names_sep`: The delimiter that does not exist in DNS names
@@ -186,9 +189,8 @@ class UrlDialog(tk.Toplevel):
         self._DELAY_COL_IDX = 3
         self._TIMINT_AFTER = 40
         self._afterId: str | None = None
-        self._validColor = 'green'
-        self._invalidColor = '#ca482e'
-        self._SEP = '#*#'
+        self._SEP = delimiter
+        """The delimiter which does not exist in DNS names."""
         self._urlParts: ParseResult | None = None
         self._dnsTester: DnsTesterThrd | None = None
         self._qIps = Queue[Iterable[IPv4 | IPv6]]()
@@ -199,9 +201,21 @@ class UrlDialog(tk.Toplevel):
         # Bindings...
         #self.bind('<Return>', lambda _: self._onApproved())
         self.bind('<Escape>', lambda _: self._onCanceled())
+        self.bind('<Key>', self._onKeyPressed)
         self.protocol('WM_DELETE_WINDOW', self._onCanceled)
         #
         self.after(10, self._centerDialog, master)
+    
+    def _onKeyPressed(self, event: tk.Event) -> None:
+        if isinstance(event.state, str):
+            logging.error('invalid modifier as str in URL tester key'
+                ' pressed event haandler')
+            return
+        modifiers = Modifiers(event.state) & (
+            Modifiers.ALT | Modifiers.CONTROL | Modifiers.SHIFT)
+        if modifiers == Modifiers.CONTROL:
+            if event.keycode == KeyCodes.C:
+                self._copyToClipboard()
     
     def _centerDialog(self, parent: tk.Misc) -> None:
         _, x, y = parent.winfo_geometry().split('+')
@@ -234,15 +248,12 @@ class UrlDialog(tk.Toplevel):
         self._frm_url.pack(side=tk.TOP, fill=tk.X, expand=True)
         #
         self._lbl_url = ttk.Label(self._frm_url, text=(_('URL') + ':'))
-        self._lbl_url.config(foreground=self._invalidColor)
         self._lbl_url.pack(side=tk.LEFT, padx=2, pady=2)
         #
         self._svar_url = tk.StringVar(self)
         self._entry_url = ttk.Entry(
             self._frm_url,
-            textvariable=self._svar_url,
-            validate='key',
-            validatecommand=(self.register(self._validateUrl), '%P'))
+            textvariable=self._svar_url,)
         self._entry_url.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
         #
         self._frm_dnses = ttk.Frame(self._frm_container)
@@ -258,6 +269,7 @@ class UrlDialog(tk.Toplevel):
             orient=tk.HORIZONTAL)
         self._trvw = ttk.Treeview(
             self._frm_dnses,
+            selectmode='browse',
             xscrollcommand=self._hscrlbr.set,
             yscrollcommand=self._vscrlbr.set)  
         self._vscrlbr.config(command=self._trvw.yview)
@@ -322,6 +334,21 @@ class UrlDialog(tk.Toplevel):
             command=self._onCanceled)
         self._btn_cancel.pack(side=tk.RIGHT, padx=5, pady=5)
     
+    def _getSelectedValues(
+            self,
+            ) -> tuple[str] | tuple[str, str] | tuple[str, str, str] | None:
+        selection = self._trvw.selection()
+        if len(selection) != 1:
+            return None
+        values = self._trvw.item(selection[0], option='values')
+        return tuple(list(filter(None, values))) # type: ignore
+
+    def _copyToClipboard(self) -> None:
+        values = self._getSelectedValues()
+        if values is not None:
+            self.clipboard_clear()
+            self.clipboard_append('\n'.join(values))
+    
     def _getIssuedIid(self, req_iid: _Iid) -> _Iid:
         """Gets the issued iid of the requested iid."""
         if req_iid is self._mpReqIssued:
@@ -366,28 +393,9 @@ class UrlDialog(tk.Toplevel):
                 if reqIid != issuedIid:
                     self._mpReqIssued[reqIid] = issuedIid
     
-    def _validateUrl(self, url: str) -> bool:
-        from utils.funcs import parseUrl
-        url = url.strip()
-        try:
-            self._urlParts = parseUrl(url, scheme='https')
-            self._lbl_url.config(foreground=self._validColor)
-        except TypeError as err:
-            self._urlParts = None
-            self._lbl_url.config(foreground=self._invalidColor)
-        return True
-    
     def _start(self) -> None:
-        from tkinter.messagebox import showerror
-        from urllib.parse import urlunparse
-        # Checking validity of URL...
-        if not self._urlParts:
-            showerror(message=_('INVALID_URL'))
-            return
-        #
         self._btn_startOk.config(text=_('OK'))
         self._btn_startOk.config(state=tk.DISABLED)
-        self._svar_url.set(urlunparse(self._urlParts))
         self._entry_url.config(state=tk.DISABLED)
         #
         ipsIter = self._iterChildIids()

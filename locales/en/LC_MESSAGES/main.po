@@ -132,10 +132,22 @@ msgid "LOADING_SETTINGS"
 msgstr "Loading settings..."
 
 msgid "CONFIG_LOGGER"
-msgstr "Configuring logger..."
+msgstr "Configuring logger"
+
+msgid "CHECKING_OS"
+msgstr "Checking OS"
+
+msgid "CHECKING_PYTHON"
+msgstr "Checking Python version"
 
 msgid "LOADING_RES"
 msgstr "Loading resources..."
+
+msgid "OS_INCOMPATIBILITY"
+msgstr "Right now this application is only supported on Windows."
+
+msgid "PYTHON_INCOMPATIBILITY"
+msgstr "Right now this application is guarrante ."
 
 msgid "DEL_DNS"
 msgstr "Deleting DNS server named '{}'"
