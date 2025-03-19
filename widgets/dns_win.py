@@ -115,6 +115,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         self._HIMG_RINET: PIL.Image.Image
         self._HIMG_GNTWRK: PIL.Image.Image
         self._HIMG_RNTWRK: PIL.Image.Image
+        self._HIMG_RESET: PIL.Image.Image
         self._IMG_CLOSE: TkImg
         self._IMG_ADD: TkImg
         self._IMG_REMOVE: TkImg
@@ -126,6 +127,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         self._IMG_RINET: TkImg
         self._IMG_GNTWRK: TkImg
         self._IMG_RNTWRK: TkImg
+        self._IMG_RESET: TkImg
         # Loading resources...
         print(_('LOADING_RES'))
         self._loadRes()
@@ -203,6 +205,10 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         self._HIMG_RNTWRK = PIL.Image.open(self._RES_DIR / 'rconn.png')
         self._HIMG_RNTWRK = self._HIMG_RNTWRK.resize(size=(16, 16,))
         self._IMG_RNTWRK = PIL.ImageTk.PhotoImage(image=self._HIMG_RNTWRK)
+        # Loading 'reset.png...
+        self._HIMG_RESET = PIL.Image.open(self._RES_DIR / 'rconn.png')
+        self._HIMG_RESET = self._HIMG_RESET.resize(size=(16, 16,))
+        self._IMG_RESET = PIL.ImageTk.PhotoImage(image=self._HIMG_RESET)
 
     def _initGui(self) -> None:
         #
@@ -246,6 +252,12 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         #
         self._frm_ipsTlbr = ttk.Frame(self._lfrm_ips)
         self._frm_ipsTlbr.pack(fill=tk.X, expand=True)
+        #
+        self._btn_defaultIps = ttk.Button(
+            self._frm_ipsTlbr,
+            command=self._defaultDnsSearchOrder,
+            image=self._IMG_RESET) # type: ignore
+        self._btn_defaultIps.pack(side=tk.LEFT)
         #
         self._btn_addIps = ttk.Button(
             self._frm_ipsTlbr,
@@ -402,6 +414,7 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
         self._HIMG_RINET.close()
         self._HIMG_GNTWRK.close()
         self._HIMG_RNTWRK.close()
+        self._HIMG_RESET.close()
         #
         self._saveGeometry()
         self._settings.net_int_ips_width = self._pwin_leftRight.sashpos(0)
@@ -878,6 +891,20 @@ class DnsWin(tk.Tk, LicWinMixin, InfoWinMixin):
             return
         # Setting DNS search order...
         code = config.setDnsSearchOrder(ips)
+        if code != NetConfigCode.SUCCESSFUL:
+            if code.__doc__ is None:
+                msg = _('SETTING_IPS_FAILED').format(code.name)
+            else:
+                msg = _('SETTING_IPS_FAILED').format(code.__doc__)
+            self._msgvw.AddMessage(msg)
+    
+    def _defaultDnsSearchOrder(self) -> None:
+        # Getting the selected config...
+        config = self._getSelectedConfig()
+        if config is None:
+            return
+        # Setting DNS search order...
+        code = config.setDnsSearchOrder([])
         if code != NetConfigCode.SUCCESSFUL:
             if code.__doc__ is None:
                 msg = _('SETTING_IPS_FAILED').format(code.name)

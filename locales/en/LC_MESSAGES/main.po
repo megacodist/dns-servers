@@ -47,6 +47,9 @@ msgstr "Quit"
 msgid "CMDS"
 msgstr "Commands"
 
+msgid "DEFAULT"
+msgstr "Default"
+
 msgid "IPV4"
 msgstr "IPv4"
 
@@ -129,25 +132,43 @@ msgid "CONFIRM_DEL_DNS"
 msgstr "Are you sure to delete '{}' DNS server?"
 
 msgid "LOADING_SETTINGS"
-msgstr "Loading settings..."
+msgstr "Loading settings"
+
+msgid "SETTINGS_LOADED"
+msgstr "Settings loaded"
+
+msgid "LOADING_DB"
+msgstr "Loading the database"
+
+msgid "DB_LOADED"
+msgstr "Database loaded"
 
 msgid "CONFIG_LOGGER"
 msgstr "Configuring logger"
 
+msgid "LOGGER_CONFIGED"
+msgstr "Logger configured"
+
 msgid "CHECKING_OS"
 msgstr "Checking OS"
-
-msgid "CHECKING_PYTHON"
-msgstr "Checking Python version"
-
-msgid "LOADING_RES"
-msgstr "Loading resources..."
 
 msgid "OS_INCOMPATIBILITY"
 msgstr "Right now this application is only supported on Windows."
 
+msgid "OS_APPROVED"
+msgstr "The OS is supported."
+
+msgid "CHECKING_PYTHON"
+msgstr "Checking Python version"
+
 msgid "PYTHON_INCOMPATIBILITY"
-msgstr "Right now this application is guarrante ."
+msgstr "Right now this script requires Python 3.12 or higher, but might yield unexpected result on Python 4 or above."
+
+msgid "PYTHON_APPROVED"
+msgstr "The Python version is supported."
+
+msgid "LOADING_RES"
+msgstr "Loading resources..."
 
 msgid "DEL_DNS"
 msgstr "Deleting DNS server named '{}'"

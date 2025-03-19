@@ -32,26 +32,29 @@ if TYPE_CHECKING:
 
 
 def main() -> None:
-    # Declaraing variables ----------------------
+    # Declaring variables ----------------------
     from utils.spinner import Spinner, SpinnerStyle
     global _RES_DIR
     global _settings
-    spinner = Spinner(SpinnerStyle.BOUNCING_BALL)
+    spinner = Spinner(SpinnerStyle.BLOCK)
     # Performing jobs ---------------------------
     # Check OS...
     spinner.start(_('CHECKING_OS'))
     if platform.system() != "Windows":
         print(_("OS_INCOMPATIBILITY"))
         sys.exit(1)
+    spinner.stop(_("OS_APPROVED"))
     # Check Python version...
-    if sys.version_info < (3, 12):
-        print(_("This application requires Python 3.12 or higher."))
+    spinner.start(_('CHECKING_PYTHON'))
+    if not ((3, 12,) <= sys.version_info < (4, 0,)):
+        print(_("PYTHON_INCOMPATIBILITY"))
         sys.exit(1)
+    spinner.stop(_("PYTHON_APPROVED"))
     # Configuring logger...
     spinner.start(_('CONFIG_LOGGER'))
     from utils.logger import configureLogger
     configureLogger(_APP_DIR / 'log.log')
-    spinner.stop()
+    spinner.stop(_("LOGGER_CONFIGED"))
     # Loading application settings...
     spinner.start(_('LOADING_SETTINGS'))
     try:
@@ -59,10 +62,12 @@ def main() -> None:
         _settings.Load(_APP_DIR / 'config.bin')
     except InvalidFileError:
         print(_('INVALID_SETTINGS_FILE'))
-    spinner.stop()
+    spinner.stop(_("SETTINGS_LOADED"))
     # Loading database...
+    spinner.start(_('LOADING_DB'))
     from db.sqlite3 import SqliteDb
     db = SqliteDb(_APP_DIR / 'db.db3')
+    spinner.stop(_("DB_LOADED"))
     # Creating the window...
     from widgets.dns_win import DnsWin
     try:
