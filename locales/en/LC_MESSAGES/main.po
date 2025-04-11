@@ -167,6 +167,27 @@ msgstr "Right now this script requires Python 3.12 or higher, but might yield un
 msgid "PYTHON_APPROVED"
 msgstr "The Python version is supported."
 
+msgid "CHECKING_REQUIREMENTS"
+msgstr "Checking third-party packages have already installed"
+
+msgid "REQUIREMENTS_FILE_NOT_FOUND"
+msgstr "Could not find requirements.txt"
+
+msgid "REQUIREMENTS_APPROVED"
+msgstr "Third-party packages have already installed"
+
+msgid "REQUIREMENTS_NOT_INSTALLED"
+msgstr "Some third-party packages have NOT installed"
+
+msgid "INSTALLING_REQUIREMENTS"
+msgstr "Installing third-party packages"
+
+msgid "REQUIREMENTS_INSTALLED"
+msgstr "Third-party packages have installed successfully"
+
+msgid "REQUIREMENTS_INSTALLATION_FAILED"
+msgstr "Failed to install third-party packages"
+
 msgid "LOADING_RES"
 msgstr "Loading resources..."
 
@@ -176,8 +197,8 @@ msgstr "Deleting DNS server named '{}'"
 msgid "ERROR"
 msgstr "An error occurred while {}.\nIf error persists, contact Customer Service."
 
-msgid "INVALID_SETTINGS_FILE"
-msgstr "Invalid settings file, using defaults"
+msgid "BAD_SETTINGS_FILE"
+msgstr "The settings file cannot be loaded, using default values"
 
 msgid "CREATING_WIN"
 msgstr "Creating app window..."

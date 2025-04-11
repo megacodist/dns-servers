@@ -2,10 +2,10 @@
 # 
 #
 
-from . import types as types_module
+from .types import AppSettings as BaseAppSettings
 
 
-class AppSettings(types_module.AppSettings):
+class AppSettings(BaseAppSettings):
     # App window size & position...
     win_x = 100
     win_y = 100
